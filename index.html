@@ -583,7 +583,7 @@ Ana Martínez"></textarea>
 
   async function checkPin(){
     const cfg = await apiGet('getConfig');
-    const storedPin = cfg ? cfg.adminPin : '1234';
+    const storedPin = cfg ? String(cfg.adminPin) : '1234';
     if($('#pinInput').value === storedPin){
       adminUnlocked = true;
       $('#pinGate').style.display = 'none';
