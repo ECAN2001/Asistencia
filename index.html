@@ -74,6 +74,8 @@
   .estado-tag.ok{background:var(--ok-bg);color:var(--ok);}
   .estado-tag.warn{background:var(--warn-bg);color:var(--warn);}
   .estado-tag.pending{background:#F3ECD9;color:#8A6D1D;}
+  .resumen-section{margin-bottom:18px;}
+  .resumen-section-title{font-weight:700;font-size:14px;color:var(--navy);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px;}
 
   .btn{display:block;width:100%;padding:14px;border-radius:9px;border:none;font-size:15.5px;font-weight:700;
     cursor:pointer;text-align:center;}
@@ -169,15 +171,15 @@
         </svg>
       </div>
       <div>
-        <h1>ECAN · Registro de asistencia</h1>
-        <p>Escuela Cristiana Cristo a las Naciones</p>
+        <h1>Registro de asistencia</h1>
+        <p>Comunidad ECAN</p>
       </div>
     </div>
     <button class="install-link" id="installLinkBtn">Instalar en tu celular</button>
   </div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="docente">Docente</div>
+    <div class="tab active" data-tab="docente">Colaborador</div>
     <div class="tab" data-tab="admin">Administrador</div>
   </div>
 
@@ -205,12 +207,12 @@
       </div>
 
       <div id="byNumberWrap" style="display:none;">
-        <input type="number" inputmode="numeric" id="docenteNumberInput" placeholder="Tu número de docente">
+        <input type="number" inputmode="numeric" id="docenteNumberInput" placeholder="Tu número de colaborador">
         <div class="muted" id="numberMatchMsg" style="margin-top:8px;"></div>
       </div>
 
       <div class="muted" id="noDocentesMsg" style="display:none;margin-top:8px;">
-        El administrador todavía no ha agregado docentes en la lista. Pídele que los agregue en la pestaña Administrador.
+        El administrador todavía no ha agregado colaboradores en la lista. Pídele que los agregue en la pestaña Administrador.
       </div>
 
       <div class="error-box" id="lockWarnMsg" style="display:none;margin-top:10px;">
@@ -259,6 +261,12 @@
     </div>
 
     <div class="section" id="doc-step-camera" style="display:none;">
+      <div id="tardanzaWrap" style="display:none;">
+        <div class="error-box" id="tardanzaMsg"></div>
+        <label class="field-label">Motivo (obligatorio para continuar)</label>
+        <textarea id="tardanzaText" rows="2" placeholder="Explica el motivo"></textarea>
+      </div>
+
       <label class="field-label">Foto (solo cámara, en vivo)</label>
 
       <label class="justify-check">
@@ -321,14 +329,14 @@
       <div class="admin-nav">
         <button class="active" data-panel="registros">Registros</button>
         <button data-panel="resumen">Resumen</button>
-        <button data-panel="docentes">Docentes</button>
+        <button data-panel="docentes">Colaboradores</button>
         <button data-panel="config">Configuración</button>
       </div>
 
       <!-- Registros -->
       <div class="admin-panel" id="panel-registros">
         <div class="filters">
-          <select id="filterDocente"><option value="">Todos los docentes</option></select>
+          <select id="filterDocente"><option value="">Todos los colaboradores</option></select>
           <select id="filterTipo">
             <option value="">Entrada y salida</option>
             <option value="Entrada">Solo entradas</option>
@@ -360,13 +368,13 @@
       <!-- Docentes -->
       <div class="admin-panel" id="panel-docentes" style="display:none;">
         <div class="section">
-          <label class="field-label">Agregar docente</label>
+          <label class="field-label">Agregar colaborador</label>
           <div style="display:flex;gap:8px;">
             <input type="text" id="newDocenteInput" placeholder="Nombre completo">
             <button class="btn btn-secondary" id="addDocenteBtn" style="width:auto;padding:12px 16px;">Agregar</button>
           </div>
 
-          <label class="field-label" style="margin-top:20px;">Pegar lista de docentes</label>
+          <label class="field-label" style="margin-top:20px;">Pegar lista de colaboradores</label>
           <div class="muted" style="margin-bottom:8px;">Un nombre por línea (o separados por coma). Puedes pegar la lista completa de una vez.</div>
           <textarea id="bulkDocenteInput" rows="5" placeholder="Ej:
 María López
@@ -720,6 +728,8 @@ Ana Martínez"></textarea>
   $('#myRecordsModal').addEventListener('click', (e)=>{ if(e.target.id === 'myRecordsModal') $('#myRecordsModal').classList.remove('active'); });
 
   // --- tipo de registro ---
+  let tardanzaRequerida = false;
+
   $('#btnEntrada').addEventListener('click', ()=> chooseTipo('Entrada'));
   $('#btnSalida').addEventListener('click', ()=> chooseTipo('Salida'));
   function chooseTipo(tipo){
@@ -727,10 +737,30 @@ Ana Martínez"></textarea>
     $('#btnEntrada').classList.toggle('selected', tipo === 'Entrada');
     $('#btnSalida').classList.toggle('selected', tipo === 'Salida');
     $('#doc-step-camera').style.display = 'block';
+    checkTardanza();
     updateCameraAvailability();
   }
   function updateCameraAvailability(){
     $('#openCameraBtn').disabled = !selectedTipo;
+  }
+
+  function checkTardanza(){
+    const serverDoc = docentes.find(d => d.numero === selectedDocenteNumero);
+    const nowHHMM = hora24(new Date().toISOString());
+    tardanzaRequerida = false;
+    let msg = '';
+    if(serverDoc && selectedTipo === 'Entrada' && serverDoc.horaEntrada && nowHHMM > serverDoc.horaEntrada){
+      tardanzaRequerida = true;
+      msg = `Tu horario de entrada es ${serverDoc.horaEntrada} y ya son las ${nowHHMM}. Debes justificar el retraso para continuar.`;
+    }
+    if(serverDoc && selectedTipo === 'Salida' && serverDoc.horaSalida && nowHHMM < serverDoc.horaSalida){
+      tardanzaRequerida = true;
+      msg = `Tu horario de salida es ${serverDoc.horaSalida} y aún son las ${nowHHMM}. Debes justificar la salida antes de tiempo para continuar.`;
+    }
+    $('#tardanzaWrap').style.display = tardanzaRequerida ? 'block' : 'none';
+    $('#tardanzaMsg').textContent = msg;
+    $('#tardanzaText').value = '';
+    $('#tardanzaText').style.borderColor = '';
   }
 
   // --- justificar ausencia / retraso / salida antes (sin entrada/salida ni foto) ---
@@ -843,8 +873,18 @@ Ana Martínez"></textarea>
       <span class="sub">${selectedDocenteNumero}. ${escapeHtml(selectedDocente)} · ${dateStr}</span>`;
   }
 
+  function combinarJustificacion(base){
+    if(!tardanzaRequerida) return base;
+    return base ? `${base} | ${$('#tardanzaText').value.trim()}` : $('#tardanzaText').value.trim();
+  }
+
   $('#saveRecordBtn').addEventListener('click', ()=>{
-    submitRecord(capturedDataUrl, '', $('#saveRecordBtn'), 'Guardar registro');
+    if(tardanzaRequerida && !$('#tardanzaText').value.trim()){
+      $('#tardanzaText').style.borderColor = 'var(--warn)';
+      $('#tardanzaText').focus();
+      return;
+    }
+    submitRecord(capturedDataUrl, combinarJustificacion(''), $('#saveRecordBtn'), 'Guardar registro');
   });
 
   $('#saveJustifyBtn').addEventListener('click', ()=>{
@@ -854,7 +894,12 @@ Ana Martínez"></textarea>
       $('#justifyText').focus();
       return;
     }
-    submitRecord(null, text, $('#saveJustifyBtn'), 'Guardar registro');
+    if(tardanzaRequerida && !$('#tardanzaText').value.trim()){
+      $('#tardanzaText').style.borderColor = 'var(--warn)';
+      $('#tardanzaText').focus();
+      return;
+    }
+    submitRecord(null, combinarJustificacion(text), $('#saveJustifyBtn'), 'Guardar registro');
   });
 
   $('#newRecordBtn').addEventListener('click', resetDocenteFlow);
@@ -862,6 +907,7 @@ Ana Martínez"></textarea>
   function resetDocenteFlow(){
     selectedTipo = '';
     capturedDataUrl = null;
+    tardanzaRequerida = false;
     $('#btnEntrada').classList.remove('selected');
     $('#btnSalida').classList.remove('selected');
     $('#justifyCheck').checked = false;
@@ -870,6 +916,9 @@ Ana Martínez"></textarea>
     $('#justifyText').style.borderColor = '';
     $('#justifSubtipoText').value = '';
     $('#justifSubtipoText').style.borderColor = '';
+    $('#tardanzaWrap').style.display = 'none';
+    $('#tardanzaText').value = '';
+    $('#tardanzaText').style.borderColor = '';
     $('#cameraIdle').style.display = 'block';
     $('#cameraLive').style.display = 'none';
     $('#cameraPreview').style.display = 'none';
@@ -960,7 +1009,7 @@ Ana Martínez"></textarea>
     const msg = $('#bulkAddedMsg');
     if(result && result.ok){
       const dup = incoming.length - added;
-      msg.textContent = `Se agregaron ${added} docente(s).` + (dup > 0 ? ` ${dup} ya estaban en la lista.` : '');
+      msg.textContent = `Se agregaron ${added} colaborador(es).` + (dup > 0 ? ` ${dup} ya estaban en la lista.` : '');
       msg.style.display = 'block';
       setTimeout(()=>{ msg.style.display = 'none'; }, 4000);
     }
@@ -978,7 +1027,7 @@ Ana Martínez"></textarea>
     const sorted = [...list].sort((a,b) => a.numero - b.numero);
     const box = $('#docentesList');
     if(!list.length){
-      box.innerHTML = '<div class="muted">Todavía no hay docentes agregados.</div>';
+      box.innerHTML = '<div class="muted">Todavía no hay colaboradores agregados.</div>';
     }else{
       box.innerHTML = sorted.map(d => `
         <div class="docente-card" data-numero="${d.numero}">
@@ -1009,7 +1058,7 @@ Ana Martínez"></textarea>
       $$('.del-btn', box).forEach(b=>{
         b.addEventListener('click', async ()=>{
           const numero = Number(b.closest('.docente-card').dataset.numero);
-          if(!confirm('¿Eliminar este docente?')) return;
+          if(!confirm('¿Eliminar este colaborador?')) return;
           const current = (await apiGet('getDocentes')) || [];
           const updated = current.filter(d => d.numero !== numero);
           await apiPost('saveDocentes', { docentes: updated });
@@ -1038,7 +1087,7 @@ Ana Martínez"></textarea>
       $$('.reiniciar-btn', box).forEach(b=>{
         b.addEventListener('click', async ()=>{
           const numero = Number(b.closest('.docente-card').dataset.numero);
-          if(!confirm('Esto permitirá que ese docente vuelva a elegir su identidad en su dispositivo y le pedirá aceptar el horario de nuevo. ¿Continuar?')) return;
+          if(!confirm('Esto permitirá que ese colaborador vuelva a elegir su identidad en su dispositivo y le pedirá aceptar el horario de nuevo. ¿Continuar?')) return;
           await apiPost('reiniciarDocente', { numero });
           renderDocentesAdmin();
         });
@@ -1052,7 +1101,7 @@ Ana Martínez"></textarea>
     $('#noDocentesMsg').style.display = list.length ? 'none' : 'block';
     const filterSel = $('#filterDocente');
     const currentFilter = filterSel.value;
-    filterSel.innerHTML = '<option value="">Todos los docentes</option>' +
+    filterSel.innerHTML = '<option value="">Todos los colaboradores</option>' +
       sorted.map(d => `<option value="${escapeHtml(d.nombre)}">${d.numero}. ${escapeHtml(d.nombre)}</option>`).join('');
     filterSel.value = currentFilter;
   }
@@ -1064,6 +1113,26 @@ Ana Martínez"></textarea>
     return new Date(d - tz).toISOString().slice(0, 10);
   }
   $('#resumenFecha').addEventListener('change', renderResumen);
+
+  function resumenPersonLine(d, hora, badgeClass, badgeText, extra){
+    return `
+      <div class="record" style="padding:10px 0;">
+        <div class="info">
+          <div class="name">${d.numero}. ${escapeHtml(d.nombre)}</div>
+          <div class="meta">${hora ? hora : ''}</div>
+          <span class="estado-tag ${badgeClass}">${badgeText}</span>
+          ${extra ? `<div class="muted" style="margin-top:4px;">${extra}</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function resumenSection(title, itemsHtml, emptyText){
+    return `
+      <div class="resumen-section">
+        <div class="resumen-section-title">${title} <span class="muted" style="font-weight:400;">(${itemsHtml.count})</span></div>
+        ${itemsHtml.count ? itemsHtml.html : `<div class="muted" style="padding:8px 0;">${emptyText}</div>`}
+      </div>`;
+  }
 
   async function renderResumen(){
     if(!$('#resumenFecha').value) $('#resumenFecha').value = todayLocalISO();
@@ -1077,41 +1146,48 @@ Ana Martínez"></textarea>
     const list = (docentesList || []).sort((a,b) => a.numero - b.numero);
     const allRecords = records || [];
     if(!list.length){
-      box.innerHTML = '<div class="empty">Todavía no hay docentes agregados.</div>';
+      box.innerHTML = '<div class="empty">Todavía no hay colaboradores agregados.</div>';
       return;
     }
-    box.innerHTML = list.map(d=>{
+
+    const asistencia = [], retrasos = [], salidasAntes = [], ausentes = [];
+
+    list.forEach(d=>{
       const ofDay = allRecords.filter(r => r.docente === d.nombre && r.timestamp.slice(0,10) === fecha);
       const entrada = ofDay.find(r => r.tipo === 'Entrada');
       const salida = ofDay.find(r => r.tipo === 'Salida');
-      const justif = ofDay.find(r => ['Ausencia','Retraso','SalidaAntes'].includes(r.tipo));
-
-      let lineas = [];
+      const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
 
       if(entrada){
         const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-        const aTiempo = !d.horaEntrada || hora24(entrada.timestamp) <= d.horaEntrada;
-        lineas.push(`Entrada: <b>${hora}</b> <span class="estado-tag ${aTiempo ? 'ok' : 'warn'}">${aTiempo ? 'A tiempo' : 'Tarde'}</span>`);
-      }
-      if(salida){
-        const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-        const aTiempo = !d.horaSalida || hora24(salida.timestamp) >= d.horaSalida;
-        lineas.push(`Salida: <b>${hora}</b> <span class="estado-tag ${aTiempo ? 'ok' : 'warn'}">${aTiempo ? 'A tiempo' : 'Salió antes'}</span>`);
-      }
-      if(justif){
-        const tipoLabel = { Ausencia:'Ausencia', Retraso:'Retraso', SalidaAntes:'Salida antes' }[justif.tipo];
-        lineas.push(`<span class="estado-tag pending">Justificó ${tipoLabel}</span>: ${escapeHtml(justif.justificacion)}`);
-      }
-      if(!entrada && !justif){
-        lineas.unshift(`<span class="estado-tag warn">Ausente</span> (sin registro este día)`);
+        const esTarde = d.horaEntrada && hora24(entrada.timestamp) > d.horaEntrada;
+        if(esTarde){
+          retrasos.push(resumenPersonLine(d, `Llegó: ${hora} (horario: ${d.horaEntrada})`, 'warn', 'Retraso',
+            entrada.justificacion ? 'Justificación: ' + escapeHtml(entrada.justificacion) : 'Sin justificar'));
+        }else{
+          asistencia.push(resumenPersonLine(d, `Entrada: ${hora}`, 'ok', 'A tiempo'));
+        }
+      }else if(ausenciaJustif){
+        ausentes.push(resumenPersonLine(d, '', 'pending', 'Ausente (justificado)', escapeHtml(ausenciaJustif.justificacion)));
+      }else{
+        ausentes.push(resumenPersonLine(d, '', 'warn', 'Ausente (sin registro)'));
       }
 
-      return `
-        <div class="docente-card">
-          <div style="font-weight:700;margin-bottom:6px;">${d.numero}. ${escapeHtml(d.nombre)}</div>
-          <div style="font-size:13px;line-height:1.9;">${lineas.join('<br>')}</div>
-        </div>`;
-    }).join('');
+      if(salida){
+        const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+        const esAntes = d.horaSalida && hora24(salida.timestamp) < d.horaSalida;
+        if(esAntes){
+          salidasAntes.push(resumenPersonLine(d, `Salió: ${hora} (horario: ${d.horaSalida})`, 'warn', 'Salida antes',
+            salida.justificacion ? 'Justificación: ' + escapeHtml(salida.justificacion) : 'Sin justificar'));
+        }
+      }
+    });
+
+    box.innerHTML =
+      resumenSection('Asistencia (a tiempo)', { html: asistencia.join(''), count: asistencia.length }, 'Nadie en esta categoría hoy.') +
+      resumenSection('Retraso en entrada', { html: retrasos.join(''), count: retrasos.length }, 'Nadie llegó tarde hoy.') +
+      resumenSection('Salida antes de tiempo', { html: salidasAntes.join(''), count: salidasAntes.length }, 'Nadie salió antes hoy.') +
+      resumenSection('Ausentes', { html: ausentes.join(''), count: ausentes.length }, 'Nadie ausente hoy.');
   }
 
   // extrae 'HH:MM' en hora local a partir de un timestamp ISO
