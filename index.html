@@ -1,0 +1,840 @@
+<!-- ECAN · Asistencia con cámara -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%2316324F'/%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='%23C9962C' stroke-width='3'/%3E%3Crect x='46' y='24' width='8' height='34' fill='%23F7F4EC'/%3E%3Crect x='33' y='34' width='34' height='8' fill='%23F7F4EC'/%3E%3Ctext x='50' y='76' font-family='Georgia,serif' font-size='16' font-weight='700' fill='%23C9962C' text-anchor='middle'%3EECAN%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316324F'/%3E%3Crect x='46' y='20' width='8' height='40' fill='%23F7F4EC'/%3E%3Crect x='30' y='36' width='40' height='8' fill='%23F7F4EC'/%3E%3Ctext x='50' y='82' font-family='Georgia,serif' font-size='17' font-weight='700' fill='%23C9962C' text-anchor='middle'%3EECAN%3C/text%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16324F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ECAN Asistencia">
+<style>
+  :root{
+    --navy:#16324F;
+    --navy-dark:#0F2438;
+    --gold:#C9962C;
+    --gold-light:#E8C878;
+    --cream:#F7F4EC;
+    --ink:#1E2A32;
+    --muted:#6B7680;
+    --line:#DEDAD0;
+    --ok:#3F7859;
+    --ok-bg:#E7F1EA;
+    --warn:#B0463C;
+    --warn-bg:#F7E9E7;
+    --white:#FFFFFF;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--cream);color:var(--ink);}
+  .app{max-width:480px;margin:0 auto;min-height:100vh;background:var(--white);display:flex;flex-direction:column;box-shadow:0 0 40px rgba(0,0,0,0.06);}
+
+  .top{background:var(--navy);color:var(--white);padding:22px 20px 18px;}
+  .top h1{margin:0;font-size:19px;font-weight:700;letter-spacing:0.01em;}
+  .top p{margin:4px 0 0;font-size:12.5px;color:#BFD0DD;}
+
+  .tabs{display:flex;background:var(--navy-dark);}
+  .tab{flex:1;text-align:center;padding:12px 8px;font-size:13.5px;font-weight:600;color:#9FB3C2;cursor:pointer;border-bottom:3px solid transparent;user-select:none;}
+  .tab.active{color:var(--white);border-bottom:3px solid var(--gold);background:rgba(255,255,255,0.04);}
+
+  .view{display:none;flex:1;flex-direction:column;}
+  .view.active{display:flex;}
+
+  .section{padding:20px;}
+  .section + .section{border-top:1px solid var(--line);}
+
+  label.field-label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+  select, input[type=text], input[type=password], textarea{
+    width:100%;padding:12px 13px;border:1.5px solid var(--line);border-radius:8px;
+    font-size:15px;color:var(--ink);background:var(--white);appearance:none;
+  }
+  select:focus, input:focus, textarea:focus{outline:none;border-color:var(--navy);}
+
+  .choice-row{display:flex;gap:10px;margin-top:8px;}
+  .choice-btn{flex:1;padding:16px 10px;border-radius:10px;border:2px solid var(--line);background:var(--white);
+    font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:center;transition:border-color .15s, background .15s;}
+  .choice-btn.selected.entrada{border-color:var(--ok);background:var(--ok-bg);color:var(--ok);}
+  .choice-btn.selected.salida{border-color:var(--warn);background:var(--warn-bg);color:var(--warn);}
+
+  .mode-row{display:flex;gap:8px;}
+  .mode-btn{flex:1;padding:10px 8px;border-radius:8px;border:1.5px solid var(--line);background:var(--white);
+    font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;text-align:center;}
+  .mode-btn.active{border-color:var(--navy);background:#EEF2F5;color:var(--navy);}
+
+  .btn{display:block;width:100%;padding:14px;border-radius:9px;border:none;font-size:15.5px;font-weight:700;
+    cursor:pointer;text-align:center;}
+  .btn-primary{background:var(--gold);color:var(--navy-dark);}
+  .btn-primary:disabled{background:#E8DFC7;color:#A79B77;cursor:not-allowed;}
+  .btn-secondary{background:var(--navy);color:var(--white);}
+  .btn-ghost{background:transparent;color:var(--navy);border:1.5px solid var(--navy);}
+  .btn-danger{background:transparent;color:var(--warn);border:1.5px solid var(--warn);}
+  .btn+.btn{margin-top:10px;}
+
+  .camera-wrap{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:3/4;}
+  video, .shot-preview{width:100%;height:100%;object-fit:cover;display:block;}
+  .camera-hint{position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#fff;font-size:12px;opacity:0.85;}
+
+  .capture-fab{width:64px;height:64px;border-radius:50%;background:var(--white);border:4px solid var(--gold);
+    margin:16px auto 0;display:block;cursor:pointer;}
+
+  .confirm-banner{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:16px;text-align:center;font-weight:700;font-size:15px;}
+  .confirm-banner .sub{display:block;font-weight:500;font-size:13px;margin-top:4px;color:#33684A;}
+
+  .muted{color:var(--muted);font-size:13px;}
+  .error-box{background:var(--warn-bg);color:var(--warn);border-radius:8px;padding:12px 14px;font-size:13.5px;margin-top:10px;}
+
+  /* Admin */
+  .pin-gate{padding:40px 24px;text-align:center;}
+  .pin-gate h2{font-size:17px;margin-bottom:4px;}
+  .admin-nav{display:flex;gap:6px;padding:14px 20px 0;}
+  .admin-nav button{flex:1;padding:9px 6px;font-size:12.5px;font-weight:600;border-radius:7px;border:1.5px solid var(--line);
+    background:var(--white);color:var(--muted);cursor:pointer;}
+  .admin-nav button.active{border-color:var(--navy);color:var(--navy);background:#EEF2F5;}
+
+  .record{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);}
+  .record img{width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eee;cursor:pointer;}
+  .record .info{flex:1;min-width:0;}
+  .record .name{font-weight:700;font-size:14.5px;}
+  .record .meta{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-top:5px;}
+  .badge.entrada{background:var(--ok-bg);color:var(--ok);}
+  .badge.salida{background:var(--warn-bg);color:var(--warn);}
+  .school-toggle{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:12.5px;}
+  .school-toggle input{width:16px;height:16px;}
+  .del-btn{background:none;border:none;color:#B7B2A6;font-size:18px;cursor:pointer;padding:0 2px;line-height:1;}
+
+  .docente-chip{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border:1px solid var(--line);
+    border-radius:8px;margin-top:8px;font-size:14px;}
+
+  .filters{display:flex;gap:8px;padding:14px 20px 0;}
+  .filters select{font-size:13px;padding:9px 10px;}
+
+  .empty{padding:40px 20px;text-align:center;color:var(--muted);font-size:14px;}
+
+  .lightbox{position:fixed;inset:0;background:rgba(15,20,25,0.92);display:none;align-items:center;justify-content:center;z-index:50;padding:24px;}
+  .lightbox.active{display:flex;}
+  .lightbox img{max-width:100%;max-height:80vh;border-radius:8px;}
+  .lightbox .close{position:absolute;top:18px;right:22px;color:#fff;font-size:26px;background:none;border:none;cursor:pointer;}
+
+  .top-row{display:flex;align-items:center;gap:12px;}
+  .logo-badge{width:44px;height:44px;border-radius:50%;background:var(--navy-dark);border:2px solid var(--gold);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .logo-badge svg{width:26px;height:26px;}
+  .install-link{background:none;border:none;color:#BFD0DD;font-size:12px;text-decoration:underline;cursor:pointer;
+    padding:0;margin-top:8px;}
+
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,20,25,0.55);display:none;align-items:flex-end;justify-content:center;z-index:60;}
+  .modal-overlay.active{display:flex;}
+  .modal-sheet{background:var(--white);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:22px 20px 28px;max-height:80vh;overflow-y:auto;}
+  .modal-sheet h3{margin:0 0 4px;font-size:16px;}
+  .modal-sheet .muted{margin-bottom:14px;}
+  .install-steps{margin:0 0 18px;padding-left:20px;font-size:13.5px;line-height:1.6;}
+  .install-steps b{color:var(--navy);}
+  .modal-close-btn{margin-top:6px;}
+</style>
+
+<div class="app">
+  <div class="top">
+    <div class="top-row">
+      <div class="logo-badge" id="logoBadge">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <rect x="46" y="20" width="8" height="40" fill="#F7F4EC"/>
+          <rect x="30" y="36" width="40" height="8" fill="#F7F4EC"/>
+        </svg>
+      </div>
+      <div>
+        <h1>ECAN · Registro de asistencia</h1>
+        <p>Escuela Cristiana Cristo a las Naciones</p>
+      </div>
+    </div>
+    <button class="install-link" id="installLinkBtn">Instalar en tu celular</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="docente">Docente</div>
+    <div class="tab" data-tab="admin">Administrador</div>
+  </div>
+
+  <!-- ===================== VISTA DOCENTE ===================== -->
+  <div class="view active" id="view-docente">
+
+    <div class="section" id="doc-step-name">
+      <label class="field-label">Identifícate</label>
+      <div class="mode-row" style="margin-top:0;margin-bottom:10px;">
+        <div class="mode-btn active" id="modeByName">Elegir mi nombre</div>
+        <div class="mode-btn" id="modeByNumber">Escribir mi número</div>
+      </div>
+
+      <div id="byNameWrap">
+        <select id="docenteSelect">
+          <option value="">— Elige tu nombre —</option>
+        </select>
+      </div>
+
+      <div id="byNumberWrap" style="display:none;">
+        <input type="number" inputmode="numeric" id="docenteNumberInput" placeholder="Tu número de docente">
+        <div class="muted" id="numberMatchMsg" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="muted" id="noDocentesMsg" style="display:none;margin-top:8px;">
+        El administrador todavía no ha agregado docentes en la lista. Pídele que los agregue en la pestaña Administrador.
+      </div>
+    </div>
+
+    <div class="section" id="doc-step-tipo">
+      <label class="field-label">¿Qué vas a registrar?</label>
+      <div class="choice-row">
+        <div class="choice-btn entrada" id="btnEntrada">Entrada</div>
+        <div class="choice-btn salida" id="btnSalida">Salida</div>
+      </div>
+    </div>
+
+    <div class="section" id="doc-step-camera">
+      <label class="field-label">Foto (solo cámara, en vivo)</label>
+
+      <div id="cameraIdle">
+        <button class="btn btn-primary" id="openCameraBtn" disabled>Abrir cámara</button>
+        <div class="muted" style="margin-top:8px;">Selecciona tu nombre y el tipo de registro para habilitar la cámara.</div>
+      </div>
+
+      <div id="cameraLive" style="display:none;">
+        <div class="camera-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="camera-hint">Encuadra tu rostro y las instalaciones</div>
+        </div>
+        <button class="capture-fab" id="captureBtn" title="Tomar foto"></button>
+      </div>
+
+      <div id="cameraPreview" style="display:none;">
+        <div class="camera-wrap">
+          <img class="shot-preview" id="shotImg" alt="Foto capturada">
+        </div>
+        <button class="btn btn-primary" id="saveRecordBtn">Guardar registro</button>
+        <button class="btn btn-ghost" id="retakeBtn">Repetir foto</button>
+      </div>
+
+      <div id="cameraError" class="error-box" style="display:none;"></div>
+    </div>
+
+    <div class="section" id="doc-confirm" style="display:none;">
+      <div class="confirm-banner" id="confirmBanner"></div>
+      <button class="btn btn-secondary" id="newRecordBtn" style="margin-top:14px;">Registrar otra asistencia</button>
+    </div>
+
+  </div>
+
+  <!-- ===================== VISTA ADMIN ===================== -->
+  <div class="view" id="view-admin">
+
+    <div class="pin-gate" id="pinGate">
+      <h2>Acceso de administrador</h2>
+      <p class="muted">Ingresa el PIN para ver y verificar los registros.</p>
+      <div style="margin:18px 0;">
+        <input type="password" id="pinInput" inputmode="numeric" placeholder="PIN">
+      </div>
+      <button class="btn btn-primary" id="pinSubmit">Entrar</button>
+      <div class="error-box" id="pinError" style="display:none;">PIN incorrecto.</div>
+      <p class="muted" style="margin-top:16px;">PIN por defecto: 1234 (cámbialo en Configuración).</p>
+    </div>
+
+    <div id="adminContent" style="display:none;">
+      <div class="admin-nav">
+        <button class="active" data-panel="registros">Registros</button>
+        <button data-panel="docentes">Docentes</button>
+        <button data-panel="config">Configuración</button>
+      </div>
+
+      <!-- Registros -->
+      <div class="admin-panel" id="panel-registros">
+        <div class="filters">
+          <select id="filterDocente"><option value="">Todos los docentes</option></select>
+          <select id="filterTipo">
+            <option value="">Entrada y salida</option>
+            <option value="Entrada">Solo entradas</option>
+            <option value="Salida">Solo salidas</option>
+          </select>
+        </div>
+        <div class="section" id="recordsList"></div>
+      </div>
+
+      <!-- Docentes -->
+      <div class="admin-panel" id="panel-docentes" style="display:none;">
+        <div class="section">
+          <label class="field-label">Agregar docente</label>
+          <div style="display:flex;gap:8px;">
+            <input type="text" id="newDocenteInput" placeholder="Nombre completo">
+            <button class="btn btn-secondary" id="addDocenteBtn" style="width:auto;padding:12px 16px;">Agregar</button>
+          </div>
+
+          <label class="field-label" style="margin-top:20px;">Pegar lista de docentes</label>
+          <div class="muted" style="margin-bottom:8px;">Un nombre por línea (o separados por coma). Puedes pegar la lista completa de una vez.</div>
+          <textarea id="bulkDocenteInput" rows="5" placeholder="Ej:
+María López
+Juan Pérez
+Ana Martínez"></textarea>
+          <button class="btn btn-secondary" id="addBulkDocenteBtn" style="margin-top:8px;">Agregar todos</button>
+          <div class="muted" id="bulkAddedMsg" style="display:none;margin-top:6px;"></div>
+
+          <div id="docentesList" style="margin-top:18px;"></div>
+        </div>
+      </div>
+
+      <!-- Configuración -->
+      <div class="admin-panel" id="panel-config" style="display:none;">
+        <div class="section">
+          <label class="field-label">Logo del colegio</label>
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
+            <div class="logo-badge" id="logoPreview" style="width:60px;height:60px;">
+              <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <rect x="46" y="20" width="8" height="40" fill="#F7F4EC"/>
+                <rect x="30" y="36" width="40" height="8" fill="#F7F4EC"/>
+              </svg>
+            </div>
+            <div class="muted">Se usará en el encabezado y como ícono al instalar la app en el celular.</div>
+          </div>
+          <input type="file" id="logoUploadInput" accept="image/*">
+          <button class="btn btn-ghost" id="removeLogoBtn" style="margin-top:8px;">Quitar logo y usar el predeterminado</button>
+          <div class="muted" id="logoSavedMsg" style="display:none;margin-top:8px;">Logo actualizado.</div>
+        </div>
+        <div class="section">
+          <label class="field-label">Cambiar PIN de administrador</label>
+          <input type="password" id="newPinInput" inputmode="numeric" placeholder="Nuevo PIN">
+          <button class="btn btn-secondary" id="savePinBtn" style="margin-top:10px;">Guardar PIN</button>
+          <div class="muted" id="pinSavedMsg" style="display:none;margin-top:8px;">PIN actualizado.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <button class="close" id="lightboxClose">×</button>
+  <img id="lightboxImg" alt="Foto ampliada">
+</div>
+
+<div class="modal-overlay" id="installModal">
+  <div class="modal-sheet">
+    <h3>Instalar como app en tu celular</h3>
+    <p class="muted">Así te queda un ícono directo en la pantalla de inicio, sin abrir el navegador cada vez.</p>
+
+    <div><b style="font-size:13.5px;">En iPhone (Safari):</b></div>
+    <ol class="install-steps">
+      <li>Abre este enlace en <b>Safari</b>.</li>
+      <li>Toca el botón <b>Compartir</b> (el cuadro con la flecha hacia arriba).</li>
+      <li>Elige <b>"Agregar a pantalla de inicio"</b>.</li>
+      <li>Toca <b>Agregar</b>. Aparecerá el ícono de ECAN en tu pantalla.</li>
+    </ol>
+
+    <div><b style="font-size:13.5px;">En Android (Chrome):</b></div>
+    <ol class="install-steps">
+      <li>Abre este enlace en <b>Chrome</b>.</li>
+      <li>Toca el menú <b>⋮</b> (arriba a la derecha).</li>
+      <li>Elige <b>"Agregar a pantalla de inicio"</b> o <b>"Instalar app"</b>.</li>
+      <li>Confirma. Aparecerá el ícono de ECAN en tu pantalla.</li>
+    </ol>
+
+    <button class="btn btn-secondary modal-close-btn" id="installModalClose">Entendido</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = (sel, ctx) => (ctx||document).querySelector(sel);
+  const $$ = (sel, ctx) => Array.from((ctx||document).querySelectorAll(sel));
+
+  // ---------- storage helpers ----------
+  async function getVal(key, shared, fallback){
+    try{
+      const r = await window.storage.get(key, shared);
+      if(!r) return fallback;
+      return JSON.parse(r.value);
+    }catch(e){ return fallback; }
+  }
+  async function setVal(key, shared, value){
+    try{
+      await window.storage.set(key, JSON.stringify(value), shared);
+      return true;
+    }catch(e){ console.error('storage error', e); return false; }
+  }
+
+  // ---------- tabs ----------
+  $$('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      $$('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      $$('.view').forEach(v=>v.classList.remove('active'));
+      $('#view-'+t.dataset.tab).classList.add('active');
+      if(t.dataset.tab === 'admin' && adminUnlocked) renderAdmin();
+    });
+  });
+
+  // =========================================================
+  // VISTA DOCENTE
+  // =========================================================
+  let docentes = [];              // [{numero, nombre}]
+  let selectedDocente = '';
+  let selectedDocenteNumero = null;
+  let selectedTipo = '';
+  let stream = null;
+  let capturedDataUrl = null;
+
+  async function loadDocentesIntoSelect(){
+    docentes = await getDocentesList();
+    const sel = $('#docenteSelect');
+    sel.innerHTML = '<option value="">— Elige tu nombre —</option>' +
+      docentes.map(d => `<option value="${escapeHtml(d.nombre)}">${d.numero}. ${escapeHtml(d.nombre)}</option>`).join('');
+    $('#noDocentesMsg').style.display = docentes.length ? 'none' : 'block';
+  }
+
+  async function getDocentesList(){
+    let list = await getVal('docentes', true, []);
+    if(list.length && typeof list[0] === 'string'){
+      list = list.map((n, i) => ({ numero: i + 1, nombre: n }));
+      await setVal('docentes', true, list);
+    }
+    return list;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // --- modo de identificación: por nombre o por número ---
+  $('#modeByName').addEventListener('click', ()=> setIdMode('name'));
+  $('#modeByNumber').addEventListener('click', ()=> setIdMode('number'));
+
+  function setIdMode(mode){
+    $('#modeByName').classList.toggle('active', mode === 'name');
+    $('#modeByNumber').classList.toggle('active', mode === 'number');
+    $('#byNameWrap').style.display = mode === 'name' ? 'block' : 'none';
+    $('#byNumberWrap').style.display = mode === 'number' ? 'block' : 'none';
+    selectedDocente = '';
+    selectedDocenteNumero = null;
+    $('#docenteSelect').value = '';
+    $('#docenteNumberInput').value = '';
+    $('#numberMatchMsg').textContent = '';
+    updateCameraAvailability();
+  }
+
+  $('#docenteSelect').addEventListener('change', e=>{
+    selectedDocente = e.target.value;
+    const match = docentes.find(d => d.nombre === selectedDocente);
+    selectedDocenteNumero = match ? match.numero : null;
+    updateCameraAvailability();
+  });
+
+  $('#docenteNumberInput').addEventListener('input', e=>{
+    const num = parseInt(e.target.value, 10);
+    const match = docentes.find(d => d.numero === num);
+    if(match){
+      selectedDocente = match.nombre;
+      selectedDocenteNumero = match.numero;
+      $('#numberMatchMsg').textContent = `→ ${match.numero}. ${match.nombre}`;
+      $('#numberMatchMsg').style.color = 'var(--ok)';
+    }else{
+      selectedDocente = '';
+      selectedDocenteNumero = null;
+      $('#numberMatchMsg').textContent = e.target.value ? 'Número no encontrado.' : '';
+      $('#numberMatchMsg').style.color = 'var(--warn)';
+    }
+    updateCameraAvailability();
+  });
+
+  $('#btnEntrada').addEventListener('click', ()=> chooseTipo('Entrada'));
+  $('#btnSalida').addEventListener('click', ()=> chooseTipo('Salida'));
+  function chooseTipo(tipo){
+    selectedTipo = tipo;
+    $('#btnEntrada').classList.toggle('selected', tipo === 'Entrada');
+    $('#btnSalida').classList.toggle('selected', tipo === 'Salida');
+    updateCameraAvailability();
+  }
+  function updateCameraAvailability(){
+    $('#openCameraBtn').disabled = !(selectedDocente && selectedTipo);
+  }
+
+  $('#openCameraBtn').addEventListener('click', openCamera);
+
+  async function openCamera(){
+    $('#cameraError').style.display = 'none';
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false
+      });
+      $('#video').srcObject = stream;
+      $('#cameraIdle').style.display = 'none';
+      $('#cameraLive').style.display = 'block';
+      $('#cameraPreview').style.display = 'none';
+    }catch(err){
+      $('#cameraError').style.display = 'block';
+      $('#cameraError').textContent = 'No se pudo abrir la cámara. Revisa los permisos de cámara del navegador e inténtalo de nuevo.';
+    }
+  }
+
+  $('#captureBtn').addEventListener('click', ()=>{
+    const video = $('#video');
+    const canvas = document.createElement('canvas');
+    const maxW = 640;
+    const scale = Math.min(1, maxW / video.videoWidth);
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    capturedDataUrl = canvas.toDataURL('image/jpeg', 0.65);
+    $('#shotImg').src = capturedDataUrl;
+    $('#cameraLive').style.display = 'none';
+    $('#cameraPreview').style.display = 'block';
+    stopStream();
+  });
+
+  $('#retakeBtn').addEventListener('click', ()=>{
+    capturedDataUrl = null;
+    $('#cameraPreview').style.display = 'none';
+    openCamera();
+  });
+
+  function stopStream(){
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream = null;
+    }
+  }
+
+  $('#saveRecordBtn').addEventListener('click', async ()=>{
+    $('#saveRecordBtn').disabled = true;
+    $('#saveRecordBtn').textContent = 'Guardando...';
+    const now = new Date();
+    const id = now.getTime() + '-' + Math.random().toString(36).slice(2,8);
+    const record = {
+      id,
+      docente: selectedDocente,
+      tipo: selectedTipo,
+      timestamp: now.toISOString(),
+      photo: capturedDataUrl,
+      enColegio: true,
+      docenteNumero: selectedDocenteNumero
+    };
+    const ok = await setVal('att:'+id, true, record);
+    if(ok){
+      const index = await getVal('att-index', true, []);
+      index.unshift(id);
+      await setVal('att-index', true, index);
+    }
+    $('#saveRecordBtn').disabled = false;
+    $('#saveRecordBtn').textContent = 'Guardar registro';
+
+    // show confirmation
+    $('#doc-step-name').style.display = 'none';
+    $('#doc-step-tipo').style.display = 'none';
+    $('#doc-step-camera').style.display = 'none';
+    $('#doc-confirm').style.display = 'block';
+    const timeStr = now.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+    const dateStr = now.toLocaleDateString('es-SV', {day:'numeric', month:'long'});
+    $('#confirmBanner').innerHTML = `${selectedTipo} registrada — ${timeStr}
+      <span class="sub">${selectedDocenteNumero}. ${escapeHtml(selectedDocente)} · ${dateStr}</span>`;
+  });
+
+  $('#newRecordBtn').addEventListener('click', resetDocenteFlow);
+
+  function resetDocenteFlow(){
+    selectedDocente = '';
+    selectedDocenteNumero = null;
+    selectedTipo = '';
+    capturedDataUrl = null;
+    setIdMode('name');
+    $('#btnEntrada').classList.remove('selected');
+    $('#btnSalida').classList.remove('selected');
+    $('#cameraIdle').style.display = 'block';
+    $('#cameraLive').style.display = 'none';
+    $('#cameraPreview').style.display = 'none';
+    updateCameraAvailability();
+    $('#doc-step-name').style.display = 'block';
+    $('#doc-step-tipo').style.display = 'block';
+    $('#doc-step-camera').style.display = 'block';
+    $('#doc-confirm').style.display = 'none';
+  }
+
+  // =========================================================
+  // VISTA ADMIN
+  // =========================================================
+  let adminUnlocked = false;
+
+  $('#pinSubmit').addEventListener('click', checkPin);
+  $('#pinInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') checkPin(); });
+
+  async function checkPin(){
+    let storedPin = await getVal('admin-pin', true, null);
+    if(storedPin === null){
+      storedPin = '1234';
+      await setVal('admin-pin', true, storedPin);
+    }
+    if($('#pinInput').value === storedPin){
+      adminUnlocked = true;
+      $('#pinGate').style.display = 'none';
+      $('#adminContent').style.display = 'block';
+      $('#pinError').style.display = 'none';
+      renderAdmin();
+    }else{
+      $('#pinError').style.display = 'block';
+    }
+  }
+
+  $$('.admin-nav button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      $$('.admin-nav button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      $$('.admin-panel').forEach(p=>p.style.display='none');
+      $('#panel-'+btn.dataset.panel).style.display = 'block';
+      if(btn.dataset.panel === 'registros') renderRecords();
+      if(btn.dataset.panel === 'docentes') renderDocentesAdmin();
+    });
+  });
+
+  async function renderAdmin(){
+    await renderDocentesAdmin();
+    await renderRecords();
+  }
+
+  // --- Docentes management ---
+  function nextDocenteNumero(list){
+    return list.length ? Math.max(...list.map(d => d.numero)) + 1 : 1;
+  }
+
+  $('#addDocenteBtn').addEventListener('click', async ()=>{
+    const input = $('#newDocenteInput');
+    const name = input.value.trim();
+    if(!name) return;
+    const list = await getDocentesList();
+    if(!list.some(d => d.nombre === name)){
+      list.push({ numero: nextDocenteNumero(list), nombre: name });
+      await setVal('docentes', true, list);
+    }
+    input.value = '';
+    renderDocentesAdmin();
+  });
+
+  $('#addBulkDocenteBtn').addEventListener('click', async ()=>{
+    const raw = $('#bulkDocenteInput').value;
+    if(!raw.trim()) return;
+    const incoming = raw
+      .split(/[\n,]/)
+      .map(n => n.trim())
+      .filter(n => n.length > 0);
+    const list = await getDocentesList();
+    let added = 0;
+    incoming.forEach(name=>{
+      if(!list.some(d => d.nombre === name)){
+        list.push({ numero: nextDocenteNumero(list), nombre: name });
+        added++;
+      }
+    });
+    await setVal('docentes', true, list);
+    $('#bulkDocenteInput').value = '';
+    const msg = $('#bulkAddedMsg');
+    const dup = incoming.length - added;
+    msg.textContent = `Se agregaron ${added} docente(s).` + (dup > 0 ? ` ${dup} ya estaban en la lista.` : '');
+    msg.style.display = 'block';
+    setTimeout(()=>{ msg.style.display = 'none'; }, 4000);
+    renderDocentesAdmin();
+  });
+
+  async function renderDocentesAdmin(){
+    const list = await getDocentesList();
+    const sorted = [...list].sort((a,b) => a.numero - b.numero);
+    const box = $('#docentesList');
+    if(!list.length){
+      box.innerHTML = '<div class="muted">Todavía no hay docentes agregados.</div>';
+    }else{
+      box.innerHTML = sorted.map(d => `
+        <div class="docente-chip">
+          <span><b>${d.numero}.</b> ${escapeHtml(d.nombre)}</span>
+          <button class="del-btn" data-numero="${d.numero}" title="Eliminar">×</button>
+        </div>`).join('');
+      $$('.del-btn', box).forEach(b=>{
+        b.addEventListener('click', async ()=>{
+          const current = await getDocentesList();
+          const updated = current.filter(d => d.numero !== Number(b.dataset.numero));
+          await setVal('docentes', true, updated);
+          renderDocentesAdmin();
+        });
+      });
+    }
+    // keep the teacher-facing dropdown and the filter dropdown in sync
+    loadDocentesIntoSelect();
+    const filterSel = $('#filterDocente');
+    const currentFilter = filterSel.value;
+    filterSel.innerHTML = '<option value="">Todos los docentes</option>' +
+      sorted.map(d => `<option value="${escapeHtml(d.nombre)}">${d.numero}. ${escapeHtml(d.nombre)}</option>`).join('');
+    filterSel.value = currentFilter;
+  }
+
+  // --- PIN config ---
+  $('#savePinBtn').addEventListener('click', async ()=>{
+    const val = $('#newPinInput').value.trim();
+    if(!val) return;
+    await setVal('admin-pin', true, val);
+    $('#newPinInput').value = '';
+    $('#pinSavedMsg').style.display = 'block';
+    setTimeout(()=>{ $('#pinSavedMsg').style.display = 'none'; }, 2500);
+  });
+
+  // --- Records list ---
+  $('#filterDocente').addEventListener('change', renderRecords);
+  $('#filterTipo').addEventListener('change', renderRecords);
+
+  async function renderRecords(){
+    const list = $('#recordsList');
+    list.innerHTML = '<div class="empty">Cargando...</div>';
+    const index = await getVal('att-index', true, []);
+    if(!index.length){
+      list.innerHTML = '<div class="empty">Todavía no hay registros de asistencia.</div>';
+      return;
+    }
+    const records = [];
+    for(const id of index){
+      const r = await getVal('att:'+id, true, null);
+      if(r) records.push(r);
+    }
+    const fDoc = $('#filterDocente').value;
+    const fTipo = $('#filterTipo').value;
+    const filtered = records.filter(r =>
+      (!fDoc || r.docente === fDoc) && (!fTipo || r.tipo === fTipo)
+    );
+    if(!filtered.length){
+      list.innerHTML = '<div class="empty">No hay registros con ese filtro.</div>';
+      return;
+    }
+    list.innerHTML = filtered.map(r=>{
+      const d = new Date(r.timestamp);
+      const dateStr = d.toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
+      const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+      return `
+        <div class="record" data-id="${r.id}">
+          <img src="${r.photo}" data-full="${r.photo}" class="record-photo">
+          <div class="info">
+            <div class="name">${r.docenteNumero ? r.docenteNumero + '. ' : ''}${escapeHtml(r.docente)}</div>
+            <div class="meta">${dateStr} · ${timeStr}</div>
+            <span class="badge ${r.tipo === 'Entrada' ? 'entrada' : 'salida'}">${r.tipo}</span>
+            <label class="school-toggle">
+              <input type="checkbox" class="school-check" ${r.enColegio ? 'checked' : ''}>
+              En el colegio
+            </label>
+          </div>
+          <button class="del-btn" title="Eliminar registro">×</button>
+        </div>`;
+    }).join('');
+
+    $$('.record-photo', list).forEach(img=>{
+      img.addEventListener('click', ()=>{
+        $('#lightboxImg').src = img.dataset.full;
+        $('#lightbox').classList.add('active');
+      });
+    });
+    $$('.school-check', list).forEach(chk=>{
+      chk.addEventListener('change', async (e)=>{
+        const id = e.target.closest('.record').dataset.id;
+        const r = await getVal('att:'+id, true, null);
+        if(r){
+          r.enColegio = e.target.checked;
+          await setVal('att:'+id, true, r);
+        }
+      });
+    });
+    $$('.record .del-btn', list).forEach(b=>{
+      b.addEventListener('click', async (e)=>{
+        const row = e.target.closest('.record');
+        const id = row.dataset.id;
+        if(!confirm('¿Eliminar este registro?')) return;
+        let index = await getVal('att-index', true, []);
+        index = index.filter(x => x !== id);
+        await setVal('att-index', true, index);
+        renderRecords();
+      });
+    });
+  }
+
+  $('#lightboxClose').addEventListener('click', ()=> $('#lightbox').classList.remove('active'));
+  $('#lightbox').addEventListener('click', (e)=>{ if(e.target.id === 'lightbox') $('#lightbox').classList.remove('active'); });
+
+  // ---------- instalar en el celular ----------
+  $('#installLinkBtn').addEventListener('click', ()=> $('#installModal').classList.add('active'));
+  $('#installModalClose').addEventListener('click', ()=> $('#installModal').classList.remove('active'));
+  $('#installModal').addEventListener('click', (e)=>{ if(e.target.id === 'installModal') $('#installModal').classList.remove('active'); });
+
+  // si el navegador soporta instalación nativa (Chrome/Android), úsala directamente
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e)=>{
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
+  $('#installLinkBtn').addEventListener('click', async ()=>{
+    if(deferredInstallPrompt){
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+    }
+  });
+
+  // ---------- logo del colegio ----------
+  const DEFAULT_LOGO_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <rect x="46" y="20" width="8" height="40" fill="#F7F4EC"/>
+      <rect x="30" y="36" width="40" height="8" fill="#F7F4EC"/>
+    </svg>`;
+
+  function applyLogo(dataUrl){
+    const badgeHtml = dataUrl
+      ? `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+      : DEFAULT_LOGO_SVG;
+    $('#logoBadge').innerHTML = badgeHtml;
+    $('#logoPreview').innerHTML = badgeHtml;
+    if(dataUrl){
+      const iconLink = document.querySelector('link[rel="icon"]');
+      const appleLink = document.querySelector('link[rel="apple-touch-icon"]');
+      if(iconLink) iconLink.setAttribute('href', dataUrl);
+      if(appleLink) appleLink.setAttribute('href', dataUrl);
+    }
+  }
+
+  async function loadLogo(){
+    const dataUrl = await getVal('school-logo', true, null);
+    applyLogo(dataUrl);
+  }
+
+  $('#logoUploadInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      const img = new Image();
+      img.onload = async ()=>{
+        // reduce to a manageable square size before saving
+        const size = 300;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#16324F';
+        ctx.fillRect(0,0,size,size);
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+        const dataUrl = canvas.toDataURL('image/png');
+        const ok = await setVal('school-logo', true, dataUrl);
+        if(ok){
+          applyLogo(dataUrl);
+          $('#logoSavedMsg').style.display = 'block';
+          setTimeout(()=>{ $('#logoSavedMsg').style.display = 'none'; }, 2500);
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  $('#removeLogoBtn').addEventListener('click', async ()=>{
+    await setVal('school-logo', true, null);
+    applyLogo(null);
+    $('#logoUploadInput').value = '';
+  });
+
+  // ---------- init ----------
+  loadDocentesIntoSelect();
+  loadLogo();
+})();
+</script>
