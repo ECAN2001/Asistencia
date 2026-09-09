@@ -359,31 +359,47 @@ Ana Martínez"></textarea>
     if(banner) banner.style.display = 'none';
   }
 
-  async function apiGet(action){
+  async function apiGet(action, isRetry){
     try{
       const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`);
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try{ data = JSON.parse(text); }
+      catch(parseErr){
+        if(!isRetry) return apiGet(action, true);
+        showApiError('El servidor respondió algo inesperado. Intenta de nuevo en unos segundos.');
+        return null;
+      }
       if(data && data.error){ showApiError('Error del servidor: ' + data.error); return null; }
       clearApiError();
       return data;
     }catch(e){
+      if(!isRetry) return apiGet(action, true);
       showApiError('No se pudo conectar con la base de datos. Revisa tu conexión a internet.');
       return null;
     }
   }
 
-  async function apiPost(action, payload){
+  async function apiPost(action, payload, isRetry){
     try{
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action, ...payload })
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try{ data = JSON.parse(text); }
+      catch(parseErr){
+        if(!isRetry) return apiPost(action, payload, true);
+        showApiError('El servidor respondió algo inesperado. Intenta de nuevo en unos segundos.');
+        return null;
+      }
       if(data && data.error){ showApiError('Error del servidor: ' + data.error); return null; }
       clearApiError();
       return data;
     }catch(e){
+      if(!isRetry) return apiPost(action, payload, true);
       showApiError('No se pudo conectar con la base de datos. Revisa tu conexión a internet.');
       return null;
     }
@@ -677,8 +693,12 @@ Ana Martínez"></textarea>
         });
       });
     }
-    // keep the teacher-facing dropdown and the filter dropdown in sync
-    loadDocentesIntoSelect();
+    // keep the teacher-facing dropdown and the filter dropdown in sync (reuse the list we already have)
+    docentes = list;
+    const sel = $('#docenteSelect');
+    sel.innerHTML = '<option value="">— Elige tu nombre —</option>' +
+      sorted.map(d => `<option value="${escapeHtml(d.nombre)}">${d.numero}. ${escapeHtml(d.nombre)}</option>`).join('');
+    $('#noDocentesMsg').style.display = list.length ? 'none' : 'block';
     const filterSel = $('#filterDocente');
     const currentFilter = filterSel.value;
     filterSel.innerHTML = '<option value="">Todos los docentes</option>' +
