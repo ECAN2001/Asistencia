@@ -340,19 +340,57 @@ Ana Martínez"></textarea>
   const $ = (sel, ctx) => (ctx||document).querySelector(sel);
   const $$ = (sel, ctx) => Array.from((ctx||document).querySelectorAll(sel));
 
-  // ---------- storage helpers ----------
-  async function getVal(key, shared, fallback){
-    try{
-      const r = await window.storage.get(key, shared);
-      if(!r) return fallback;
-      return JSON.parse(r.value);
-    }catch(e){ return fallback; }
+  // ---------- backend: Google Sheets vía Apps Script ----------
+  const API_URL = 'https://script.google.com/macros/s/AKfycbyI9Su1-nLll1L2ejzTzwQyfrz7sSru9zA79b6LvclVqx_M4nOUz4uTRcMzqOL1SKI/exec';
+
+  function showApiError(msg){
+    let banner = $('#apiErrorBanner');
+    if(!banner){
+      banner = document.createElement('div');
+      banner.id = 'apiErrorBanner';
+      banner.style.cssText = 'background:#B0463C;color:#fff;padding:10px 16px;font-size:12.5px;text-align:center;';
+      document.querySelector('.app').prepend(banner);
+    }
+    banner.textContent = msg;
+    banner.style.display = 'block';
   }
-  async function setVal(key, shared, value){
+  function clearApiError(){
+    const banner = $('#apiErrorBanner');
+    if(banner) banner.style.display = 'none';
+  }
+
+  async function apiGet(action){
     try{
-      await window.storage.set(key, JSON.stringify(value), shared);
-      return true;
-    }catch(e){ console.error('storage error', e); return false; }
+      const res = await fetch(`${API_URL}?action=${encodeURIComponent(action)}`);
+      const data = await res.json();
+      if(data && data.error){ showApiError('Error del servidor: ' + data.error); return null; }
+      clearApiError();
+      return data;
+    }catch(e){
+      showApiError('No se pudo conectar con la base de datos. Revisa tu conexión a internet.');
+      return null;
+    }
+  }
+
+  async function apiPost(action, payload){
+    try{
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, ...payload })
+      });
+      const data = await res.json();
+      if(data && data.error){ showApiError('Error del servidor: ' + data.error); return null; }
+      clearApiError();
+      return data;
+    }catch(e){
+      showApiError('No se pudo conectar con la base de datos. Revisa tu conexión a internet.');
+      return null;
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
   // ---------- tabs ----------
@@ -377,24 +415,12 @@ Ana Martínez"></textarea>
   let capturedDataUrl = null;
 
   async function loadDocentesIntoSelect(){
-    docentes = await getDocentesList();
+    const list = await apiGet('getDocentes');
+    docentes = list || [];
     const sel = $('#docenteSelect');
     sel.innerHTML = '<option value="">— Elige tu nombre —</option>' +
       docentes.map(d => `<option value="${escapeHtml(d.nombre)}">${d.numero}. ${escapeHtml(d.nombre)}</option>`).join('');
     $('#noDocentesMsg').style.display = docentes.length ? 'none' : 'block';
-  }
-
-  async function getDocentesList(){
-    let list = await getVal('docentes', true, []);
-    if(list.length && typeof list[0] === 'string'){
-      list = list.map((n, i) => ({ numero: i + 1, nombre: n }));
-      await setVal('docentes', true, list);
-    }
-    return list;
-  }
-
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
   // --- modo de identificación: por nombre o por número ---
@@ -501,24 +527,19 @@ Ana Martínez"></textarea>
     $('#saveRecordBtn').disabled = true;
     $('#saveRecordBtn').textContent = 'Guardando...';
     const now = new Date();
-    const id = now.getTime() + '-' + Math.random().toString(36).slice(2,8);
-    const record = {
-      id,
+    const result = await apiPost('addAsistencia', {
       docente: selectedDocente,
+      docenteNumero: selectedDocenteNumero,
       tipo: selectedTipo,
       timestamp: now.toISOString(),
-      photo: capturedDataUrl,
-      enColegio: true,
-      docenteNumero: selectedDocenteNumero
-    };
-    const ok = await setVal('att:'+id, true, record);
-    if(ok){
-      const index = await getVal('att-index', true, []);
-      index.unshift(id);
-      await setVal('att-index', true, index);
-    }
+      photo: capturedDataUrl
+    });
     $('#saveRecordBtn').disabled = false;
     $('#saveRecordBtn').textContent = 'Guardar registro';
+
+    if(!result || !result.ok){
+      return; // el banner de error ya quedó visible
+    }
 
     // show confirmation
     $('#doc-step-name').style.display = 'none';
@@ -549,6 +570,7 @@ Ana Martínez"></textarea>
     $('#doc-step-tipo').style.display = 'block';
     $('#doc-step-camera').style.display = 'block';
     $('#doc-confirm').style.display = 'none';
+    loadDocentesIntoSelect();
   }
 
   // =========================================================
@@ -560,11 +582,8 @@ Ana Martínez"></textarea>
   $('#pinInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') checkPin(); });
 
   async function checkPin(){
-    let storedPin = await getVal('admin-pin', true, null);
-    if(storedPin === null){
-      storedPin = '1234';
-      await setVal('admin-pin', true, storedPin);
-    }
+    const cfg = await apiGet('getConfig');
+    const storedPin = cfg ? cfg.adminPin : '1234';
     if($('#pinInput').value === storedPin){
       adminUnlocked = true;
       $('#pinGate').style.display = 'none';
@@ -601,10 +620,10 @@ Ana Martínez"></textarea>
     const input = $('#newDocenteInput');
     const name = input.value.trim();
     if(!name) return;
-    const list = await getDocentesList();
+    const list = (await apiGet('getDocentes')) || [];
     if(!list.some(d => d.nombre === name)){
       list.push({ numero: nextDocenteNumero(list), nombre: name });
-      await setVal('docentes', true, list);
+      await apiPost('saveDocentes', { docentes: list });
     }
     input.value = '';
     renderDocentesAdmin();
@@ -617,7 +636,7 @@ Ana Martínez"></textarea>
       .split(/[\n,]/)
       .map(n => n.trim())
       .filter(n => n.length > 0);
-    const list = await getDocentesList();
+    const list = (await apiGet('getDocentes')) || [];
     let added = 0;
     incoming.forEach(name=>{
       if(!list.some(d => d.nombre === name)){
@@ -625,18 +644,20 @@ Ana Martínez"></textarea>
         added++;
       }
     });
-    await setVal('docentes', true, list);
+    const result = await apiPost('saveDocentes', { docentes: list });
     $('#bulkDocenteInput').value = '';
     const msg = $('#bulkAddedMsg');
-    const dup = incoming.length - added;
-    msg.textContent = `Se agregaron ${added} docente(s).` + (dup > 0 ? ` ${dup} ya estaban en la lista.` : '');
-    msg.style.display = 'block';
-    setTimeout(()=>{ msg.style.display = 'none'; }, 4000);
+    if(result && result.ok){
+      const dup = incoming.length - added;
+      msg.textContent = `Se agregaron ${added} docente(s).` + (dup > 0 ? ` ${dup} ya estaban en la lista.` : '');
+      msg.style.display = 'block';
+      setTimeout(()=>{ msg.style.display = 'none'; }, 4000);
+    }
     renderDocentesAdmin();
   });
 
   async function renderDocentesAdmin(){
-    const list = await getDocentesList();
+    const list = (await apiGet('getDocentes')) || [];
     const sorted = [...list].sort((a,b) => a.numero - b.numero);
     const box = $('#docentesList');
     if(!list.length){
@@ -649,9 +670,9 @@ Ana Martínez"></textarea>
         </div>`).join('');
       $$('.del-btn', box).forEach(b=>{
         b.addEventListener('click', async ()=>{
-          const current = await getDocentesList();
+          const current = (await apiGet('getDocentes')) || [];
           const updated = current.filter(d => d.numero !== Number(b.dataset.numero));
-          await setVal('docentes', true, updated);
+          await apiPost('saveDocentes', { docentes: updated });
           renderDocentesAdmin();
         });
       });
@@ -669,10 +690,12 @@ Ana Martínez"></textarea>
   $('#savePinBtn').addEventListener('click', async ()=>{
     const val = $('#newPinInput').value.trim();
     if(!val) return;
-    await setVal('admin-pin', true, val);
-    $('#newPinInput').value = '';
-    $('#pinSavedMsg').style.display = 'block';
-    setTimeout(()=>{ $('#pinSavedMsg').style.display = 'none'; }, 2500);
+    const result = await apiPost('setAdminPin', { pin: val });
+    if(result && result.ok){
+      $('#newPinInput').value = '';
+      $('#pinSavedMsg').style.display = 'block';
+      setTimeout(()=>{ $('#pinSavedMsg').style.display = 'none'; }, 2500);
+    }
   });
 
   // --- Records list ---
@@ -682,16 +705,12 @@ Ana Martínez"></textarea>
   async function renderRecords(){
     const list = $('#recordsList');
     list.innerHTML = '<div class="empty">Cargando...</div>';
-    const index = await getVal('att-index', true, []);
-    if(!index.length){
+    const records = (await apiGet('getAsistencia')) || [];
+    if(!records.length){
       list.innerHTML = '<div class="empty">Todavía no hay registros de asistencia.</div>';
       return;
     }
-    const records = [];
-    for(const id of index){
-      const r = await getVal('att:'+id, true, null);
-      if(r) records.push(r);
-    }
+    records.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
     const fDoc = $('#filterDocente').value;
     const fTipo = $('#filterTipo').value;
     const filtered = records.filter(r =>
@@ -730,11 +749,7 @@ Ana Martínez"></textarea>
     $$('.school-check', list).forEach(chk=>{
       chk.addEventListener('change', async (e)=>{
         const id = e.target.closest('.record').dataset.id;
-        const r = await getVal('att:'+id, true, null);
-        if(r){
-          r.enColegio = e.target.checked;
-          await setVal('att:'+id, true, r);
-        }
+        await apiPost('updateEnColegio', { id, enColegio: e.target.checked });
       });
     });
     $$('.record .del-btn', list).forEach(b=>{
@@ -742,9 +757,7 @@ Ana Martínez"></textarea>
         const row = e.target.closest('.record');
         const id = row.dataset.id;
         if(!confirm('¿Eliminar este registro?')) return;
-        let index = await getVal('att-index', true, []);
-        index = index.filter(x => x !== id);
-        await setVal('att-index', true, index);
+        await apiPost('deleteAsistencia', { id });
         renderRecords();
       });
     });
@@ -778,23 +791,23 @@ Ana Martínez"></textarea>
       <rect x="30" y="36" width="40" height="8" fill="#F7F4EC"/>
     </svg>`;
 
-  function applyLogo(dataUrl){
-    const badgeHtml = dataUrl
-      ? `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+  function applyLogo(url){
+    const badgeHtml = url
+      ? `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
       : DEFAULT_LOGO_SVG;
     $('#logoBadge').innerHTML = badgeHtml;
     $('#logoPreview').innerHTML = badgeHtml;
-    if(dataUrl){
+    if(url){
       const iconLink = document.querySelector('link[rel="icon"]');
       const appleLink = document.querySelector('link[rel="apple-touch-icon"]');
-      if(iconLink) iconLink.setAttribute('href', dataUrl);
-      if(appleLink) appleLink.setAttribute('href', dataUrl);
+      if(iconLink) iconLink.setAttribute('href', url);
+      if(appleLink) appleLink.setAttribute('href', url);
     }
   }
 
   async function loadLogo(){
-    const dataUrl = await getVal('school-logo', true, null);
-    applyLogo(dataUrl);
+    const cfg = await apiGet('getConfig');
+    applyLogo(cfg && cfg.schoolLogoUrl ? cfg.schoolLogoUrl : null);
   }
 
   $('#logoUploadInput').addEventListener('change', (e)=>{
@@ -815,9 +828,9 @@ Ana Martínez"></textarea>
         const w = img.width * scale, h = img.height * scale;
         ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
         const dataUrl = canvas.toDataURL('image/png');
-        const ok = await setVal('school-logo', true, dataUrl);
-        if(ok){
-          applyLogo(dataUrl);
+        const result = await apiPost('setLogo', { imageBase64: dataUrl });
+        if(result && result.ok){
+          applyLogo(result.url);
           $('#logoSavedMsg').style.display = 'block';
           setTimeout(()=>{ $('#logoSavedMsg').style.display = 'none'; }, 2500);
         }
@@ -828,7 +841,7 @@ Ana Martínez"></textarea>
   });
 
   $('#removeLogoBtn').addEventListener('click', async ()=>{
-    await setVal('school-logo', true, null);
+    await apiPost('clearLogo', {});
     applyLogo(null);
     $('#logoUploadInput').value = '';
   });
