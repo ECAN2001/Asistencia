@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ECAN Asistencia">
+<link rel="manifest" href="./manifest.json">
 <style>
   :root{
     --navy:#16324F;
@@ -59,6 +60,9 @@
     font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;text-align:center;}
   .mode-btn.active{border-color:var(--navy);background:#EEF2F5;color:var(--navy);}
 
+  .justify-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-bottom:12px;cursor:pointer;}
+  .justify-check input{width:16px;height:16px;flex-shrink:0;}
+
   .btn{display:block;width:100%;padding:14px;border-radius:9px;border:none;font-size:15.5px;font-weight:700;
     cursor:pointer;text-align:center;}
   .btn-primary{background:var(--gold);color:var(--navy-dark);}
@@ -91,6 +95,8 @@
 
   .record{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);}
   .record img{width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eee;cursor:pointer;}
+  .justificacion-thumb{width:64px;height:64px;border-radius:8px;flex-shrink:0;background:#EEF2F5;color:var(--navy);
+    display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;text-align:center;line-height:1.3;cursor:pointer;}
   .record .info{flex:1;min-width:0;}
   .record .name{font-weight:700;font-size:14.5px;}
   .record .meta{font-size:12.5px;color:var(--muted);margin-top:2px;}
@@ -177,6 +183,8 @@
       <div class="muted" id="noDocentesMsg" style="display:none;margin-top:8px;">
         El administrador todavía no ha agregado docentes en la lista. Pídele que los agregue en la pestaña Administrador.
       </div>
+
+      <button class="btn btn-ghost" id="viewMyRecordsBtn" style="display:none;margin-top:12px;">Ver mis registros</button>
     </div>
 
     <div class="section" id="doc-step-tipo">
@@ -190,6 +198,11 @@
     <div class="section" id="doc-step-camera">
       <label class="field-label">Foto (solo cámara, en vivo)</label>
 
+      <label class="justify-check">
+        <input type="checkbox" id="justifyCheck">
+        No puedo tomar la foto — justificar por escrito
+      </label>
+
       <div id="cameraIdle">
         <button class="btn btn-primary" id="openCameraBtn" disabled>Abrir cámara</button>
         <div class="muted" style="margin-top:8px;">Selecciona tu nombre y el tipo de registro para habilitar la cámara.</div>
@@ -198,7 +211,7 @@
       <div id="cameraLive" style="display:none;">
         <div class="camera-wrap">
           <video id="video" autoplay playsinline muted></video>
-          <div class="camera-hint">Encuadra tu rostro y las instalaciones</div>
+          <div class="camera-hint">Toma la foto en un lugar del colegio</div>
         </div>
         <button class="capture-fab" id="captureBtn" title="Tomar foto"></button>
       </div>
@@ -209,6 +222,12 @@
         </div>
         <button class="btn btn-primary" id="saveRecordBtn">Guardar registro</button>
         <button class="btn btn-ghost" id="retakeBtn">Repetir foto</button>
+      </div>
+
+      <div id="justifyWrap" style="display:none;">
+        <label class="field-label">Escribe el motivo (obligatorio)</label>
+        <textarea id="justifyText" rows="3" placeholder="Ej: Estoy haciendo una gestión fuera del colegio autorizada por dirección."></textarea>
+        <button class="btn btn-primary" id="saveJustifyBtn" style="margin-top:10px;">Guardar registro</button>
       </div>
 
       <div id="cameraError" class="error-box" style="display:none;"></div>
@@ -251,6 +270,16 @@
             <option value="Entrada">Solo entradas</option>
             <option value="Salida">Solo salidas</option>
           </select>
+        </div>
+        <div class="filters" style="padding-top:8px;">
+          <div style="flex:1;">
+            <label class="field-label" style="font-size:11px;margin-bottom:3px;">Desde</label>
+            <input type="date" id="filterFechaDesde">
+          </div>
+          <div style="flex:1;">
+            <label class="field-label" style="font-size:11px;margin-bottom:3px;">Hasta</label>
+            <input type="date" id="filterFechaHasta">
+          </div>
         </div>
         <div class="section" id="recordsList"></div>
       </div>
@@ -332,6 +361,15 @@ Ana Martínez"></textarea>
     </ol>
 
     <button class="btn btn-secondary modal-close-btn" id="installModalClose">Entendido</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="myRecordsModal">
+  <div class="modal-sheet">
+    <h3>Mis registros</h3>
+    <p class="muted" id="myRecordsSubtitle"></p>
+    <div id="myRecordsList"></div>
+    <button class="btn btn-secondary modal-close-btn" id="myRecordsClose">Cerrar</button>
   </div>
 </div>
 
@@ -453,6 +491,7 @@ Ana Martínez"></textarea>
     $('#docenteSelect').value = '';
     $('#docenteNumberInput').value = '';
     $('#numberMatchMsg').textContent = '';
+    $('#viewMyRecordsBtn').style.display = 'none';
     updateCameraAvailability();
   }
 
@@ -460,6 +499,7 @@ Ana Martínez"></textarea>
     selectedDocente = e.target.value;
     const match = docentes.find(d => d.nombre === selectedDocente);
     selectedDocenteNumero = match ? match.numero : null;
+    $('#viewMyRecordsBtn').style.display = selectedDocente ? 'block' : 'none';
     updateCameraAvailability();
   });
 
@@ -477,8 +517,42 @@ Ana Martínez"></textarea>
       $('#numberMatchMsg').textContent = e.target.value ? 'Número no encontrado.' : '';
       $('#numberMatchMsg').style.color = 'var(--warn)';
     }
+    $('#viewMyRecordsBtn').style.display = selectedDocente ? 'block' : 'none';
     updateCameraAvailability();
   });
+
+  $('#viewMyRecordsBtn').addEventListener('click', async ()=>{
+    $('#myRecordsSubtitle').textContent = `${selectedDocenteNumero}. ${selectedDocente}`;
+    $('#myRecordsList').innerHTML = '<div class="empty">Cargando...</div>';
+    $('#myRecordsModal').classList.add('active');
+    const all = (await apiGet('getAsistencia')) || [];
+    const mine = all
+      .filter(r => r.docente === selectedDocente)
+      .sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    if(!mine.length){
+      $('#myRecordsList').innerHTML = '<div class="empty">Todavía no tienes registros.</div>';
+      return;
+    }
+    $('#myRecordsList').innerHTML = mine.map(r=>{
+      const d = new Date(r.timestamp);
+      const dateStr = d.toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
+      const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+      const thumb = r.justificacion
+        ? `<div style="width:52px;height:52px;border-radius:8px;background:#EEF2F5;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;flex-shrink:0;">Justificado</div>`
+        : `<img src="${r.photo}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;">`;
+      return `
+        <div class="record">
+          ${thumb}
+          <div class="info">
+            <div class="meta">${dateStr} · ${timeStr}</div>
+            <span class="badge ${r.tipo === 'Entrada' ? 'entrada' : 'salida'}">${r.tipo}</span>
+          </div>
+        </div>`;
+    }).join('');
+  });
+
+  $('#myRecordsClose').addEventListener('click', ()=> $('#myRecordsModal').classList.remove('active'));
+  $('#myRecordsModal').addEventListener('click', (e)=>{ if(e.target.id === 'myRecordsModal') $('#myRecordsModal').classList.remove('active'); });
 
   $('#btnEntrada').addEventListener('click', ()=> chooseTipo('Entrada'));
   $('#btnSalida').addEventListener('click', ()=> chooseTipo('Salida'));
@@ -539,25 +613,36 @@ Ana Martínez"></textarea>
     }
   }
 
-  $('#saveRecordBtn').addEventListener('click', async ()=>{
-    $('#saveRecordBtn').disabled = true;
-    $('#saveRecordBtn').textContent = 'Guardando...';
+  // --- justificar sin foto ---
+  $('#justifyCheck').addEventListener('change', (e)=>{
+    const justifying = e.target.checked;
+    stopStream();
+    $('#cameraIdle').style.display = justifying ? 'none' : 'block';
+    $('#cameraLive').style.display = 'none';
+    $('#cameraPreview').style.display = 'none';
+    $('#justifyWrap').style.display = justifying ? 'block' : 'none';
+    capturedDataUrl = null;
+  });
+
+  async function submitRecord(photo, justificacion, btn, btnDefaultText){
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
     const now = new Date();
     const result = await apiPost('addAsistencia', {
       docente: selectedDocente,
       docenteNumero: selectedDocenteNumero,
       tipo: selectedTipo,
       timestamp: now.toISOString(),
-      photo: capturedDataUrl
+      photo: photo,
+      justificacion: justificacion || ''
     });
-    $('#saveRecordBtn').disabled = false;
-    $('#saveRecordBtn').textContent = 'Guardar registro';
+    btn.disabled = false;
+    btn.textContent = btnDefaultText;
 
     if(!result || !result.ok){
       return; // el banner de error ya quedó visible
     }
 
-    // show confirmation
     $('#doc-step-name').style.display = 'none';
     $('#doc-step-tipo').style.display = 'none';
     $('#doc-step-camera').style.display = 'none';
@@ -566,6 +651,20 @@ Ana Martínez"></textarea>
     const dateStr = now.toLocaleDateString('es-SV', {day:'numeric', month:'long'});
     $('#confirmBanner').innerHTML = `${selectedTipo} registrada — ${timeStr}
       <span class="sub">${selectedDocenteNumero}. ${escapeHtml(selectedDocente)} · ${dateStr}</span>`;
+  }
+
+  $('#saveRecordBtn').addEventListener('click', ()=>{
+    submitRecord(capturedDataUrl, '', $('#saveRecordBtn'), 'Guardar registro');
+  });
+
+  $('#saveJustifyBtn').addEventListener('click', ()=>{
+    const text = $('#justifyText').value.trim();
+    if(!text){
+      $('#justifyText').style.borderColor = 'var(--warn)';
+      $('#justifyText').focus();
+      return;
+    }
+    submitRecord(null, text, $('#saveJustifyBtn'), 'Guardar registro');
   });
 
   $('#newRecordBtn').addEventListener('click', resetDocenteFlow);
@@ -578,6 +677,10 @@ Ana Martínez"></textarea>
     setIdMode('name');
     $('#btnEntrada').classList.remove('selected');
     $('#btnSalida').classList.remove('selected');
+    $('#justifyCheck').checked = false;
+    $('#justifyWrap').style.display = 'none';
+    $('#justifyText').value = '';
+    $('#justifyText').style.borderColor = '';
     $('#cameraIdle').style.display = 'block';
     $('#cameraLive').style.display = 'none';
     $('#cameraPreview').style.display = 'none';
@@ -721,6 +824,8 @@ Ana Martínez"></textarea>
   // --- Records list ---
   $('#filterDocente').addEventListener('change', renderRecords);
   $('#filterTipo').addEventListener('change', renderRecords);
+  $('#filterFechaDesde').addEventListener('change', renderRecords);
+  $('#filterFechaHasta').addEventListener('change', renderRecords);
 
   async function renderRecords(){
     const list = $('#recordsList');
@@ -733,9 +838,16 @@ Ana Martínez"></textarea>
     records.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
     const fDoc = $('#filterDocente').value;
     const fTipo = $('#filterTipo').value;
-    const filtered = records.filter(r =>
-      (!fDoc || r.docente === fDoc) && (!fTipo || r.tipo === fTipo)
-    );
+    const fDesde = $('#filterFechaDesde').value;   // 'YYYY-MM-DD' o ''
+    const fHasta = $('#filterFechaHasta').value;
+    const filtered = records.filter(r => {
+      if(fDoc && r.docente !== fDoc) return false;
+      if(fTipo && r.tipo !== fTipo) return false;
+      const recordDate = r.timestamp.slice(0, 10); // 'YYYY-MM-DD'
+      if(fDesde && recordDate < fDesde) return false;
+      if(fHasta && recordDate > fHasta) return false;
+      return true;
+    });
     if(!filtered.length){
       list.innerHTML = '<div class="empty">No hay registros con ese filtro.</div>';
       return;
@@ -744,26 +856,35 @@ Ana Martínez"></textarea>
       const d = new Date(r.timestamp);
       const dateStr = d.toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
       const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+      const media = r.justificacion
+        ? `<div class="record-photo justificacion-thumb" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}">Justificado<br>(ver)</div>`
+        : `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`;
       return `
         <div class="record" data-id="${r.id}">
-          <img src="${r.photo}" data-full="${r.photo}" class="record-photo">
+          ${media}
           <div class="info">
             <div class="name">${r.docenteNumero ? r.docenteNumero + '. ' : ''}${escapeHtml(r.docente)}</div>
             <div class="meta">${dateStr} · ${timeStr}</div>
             <span class="badge ${r.tipo === 'Entrada' ? 'entrada' : 'salida'}">${r.tipo}</span>
+            ${r.justificacion ? '' : `
             <label class="school-toggle">
               <input type="checkbox" class="school-check" ${r.enColegio ? 'checked' : ''}>
               En el colegio
-            </label>
+            </label>`}
           </div>
           <button class="del-btn" title="Eliminar registro">×</button>
         </div>`;
     }).join('');
 
-    $$('.record-photo', list).forEach(img=>{
+    $$('.record-photo:not(.justificacion-thumb)', list).forEach(img=>{
       img.addEventListener('click', ()=>{
         $('#lightboxImg').src = img.dataset.full;
         $('#lightbox').classList.add('active');
+      });
+    });
+    $$('.justificacion-thumb', list).forEach(box=>{
+      box.addEventListener('click', ()=>{
+        alert(box.dataset.name + ':\n\n' + box.dataset.justificacion);
       });
     });
     $$('.school-check', list).forEach(chk=>{
@@ -869,5 +990,9 @@ Ana Martínez"></textarea>
   // ---------- init ----------
   loadDocentesIntoSelect();
   loadLogo();
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  }
 })();
 </script>
