@@ -1002,11 +1002,9 @@ Ana Martínez"></textarea>
   $('#pinInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') checkPin(); });
 
   async function checkPin(){
-    const cfg = await apiGet('getConfig');
-    const storedPin = cfg ? String(cfg.adminPin) : '1234';
-    const altPin = cfg && cfg.altPin ? String(cfg.altPin) : '';
     const entrada = $('#pinInput').value;
-    if(entrada === storedPin || (altPin && entrada === altPin)){
+    const result = await apiPost('verifyPin', { pin: entrada });
+    if(result && result.ok){
       adminUnlocked = true;
       $('#pinGate').style.display = 'none';
       $('#adminContent').style.display = 'block';
