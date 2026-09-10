@@ -48,6 +48,9 @@
     font-size:15px;color:var(--ink);background:var(--white);appearance:none;
   }
   select:focus, input:focus, textarea:focus{outline:none;border-color:var(--navy);}
+  .pin-eye-btn{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;
+    font-size:17px;cursor:pointer;color:var(--muted);padding:4px 6px;}
+  #pinInput, #newPinInput{padding-right:40px;}
 
   .choice-row{display:flex;gap:10px;margin-top:8px;}
   .choice-btn{flex:1;padding:16px 6px;border-radius:10px;border:2px solid var(--line);background:var(--white);
@@ -109,6 +112,16 @@
 
   .record{display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--line);}
   .record img{width:64px;height:64px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eee;cursor:pointer;}
+  .record-group{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;}
+  .record-group-header{font-weight:700;font-size:14.5px;margin-bottom:10px;}
+  .record-group-cols{display:flex;gap:12px;}
+  .record-col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;position:relative;}
+  .record-col .col-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.03em;}
+  .record-col .record-photo, .record-col .justificacion-thumb{width:100%;max-width:110px;height:90px;}
+  .record-col .meta{font-size:12.5px;}
+  .record-col .school-toggle{font-size:11px;}
+  .record-col.empty-col{justify-content:center;padding:20px 0;}
+  .record-col .del-btn{position:absolute;top:-4px;right:-2px;}
   .justificacion-thumb{width:64px;height:64px;border-radius:8px;flex-shrink:0;background:#EEF2F5;color:var(--navy);
     display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;text-align:center;line-height:1.3;cursor:pointer;}
   .record .info{flex:1;min-width:0;}
@@ -317,8 +330,9 @@
     <div class="pin-gate" id="pinGate">
       <h2>Acceso de administrador</h2>
       <p class="muted">Ingresa el PIN para ver y verificar los registros.</p>
-      <div style="margin:18px 0;">
+      <div style="margin:18px 0;position:relative;">
         <input type="password" id="pinInput" inputmode="numeric" placeholder="PIN">
+        <button type="button" class="pin-eye-btn" id="pinToggleEye" title="Mostrar/ocultar">👁</button>
       </div>
       <button class="btn btn-primary" id="pinSubmit">Entrar</button>
       <div class="error-box" id="pinError" style="display:none;">PIN incorrecto.</div>
@@ -427,7 +441,10 @@ Ana Martínez"></textarea>
         </div>
         <div class="section">
           <label class="field-label">Cambiar PIN de administrador</label>
-          <input type="password" id="newPinInput" inputmode="numeric" placeholder="Nuevo PIN">
+          <div style="position:relative;">
+            <input type="password" id="newPinInput" inputmode="numeric" placeholder="Nuevo PIN">
+            <button type="button" class="pin-eye-btn" id="newPinToggleEye" title="Mostrar/ocultar">👁</button>
+          </div>
           <button class="btn btn-secondary" id="savePinBtn" style="margin-top:10px;">Guardar PIN</button>
           <div class="muted" id="pinSavedMsg" style="display:none;margin-top:8px;">PIN actualizado.</div>
         </div>
@@ -956,6 +973,18 @@ Ana Martínez"></textarea>
   let adminUnlocked = false;
 
   $('#pinSubmit').addEventListener('click', checkPin);
+  function toggleEye(inputId, btnId){
+    const input = $('#'+inputId);
+    const btn = $('#'+btnId);
+    btn.addEventListener('click', ()=>{
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.style.opacity = showing ? '1' : '0.6';
+    });
+  }
+  toggleEye('pinInput', 'pinToggleEye');
+  toggleEye('newPinInput', 'newPinToggleEye');
+
   $('#pinInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') checkPin(); });
 
   async function checkPin(){
@@ -1378,6 +1407,29 @@ Ana Martínez"></textarea>
   $('#filterFechaDesde').addEventListener('change', renderRecords);
   $('#filterFechaHasta').addEventListener('change', renderRecords);
 
+  function recordColumnHtml(r){
+    if(!r){
+      return `<div class="record-col empty-col"><div class="muted">Sin registro</div></div>`;
+    }
+    const d = new Date(r.timestamp);
+    const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+    const media = r.justificacion
+      ? `<div class="record-photo justificacion-thumb" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}">Justificado<br>(ver)</div>`
+      : `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`;
+    return `
+      <div class="record-col" data-id="${r.id}">
+        <div class="col-label">${r.tipo}</div>
+        ${media}
+        <div class="meta">${timeStr}</div>
+        ${r.justificacion ? '' : `
+        <label class="school-toggle">
+          <input type="checkbox" class="school-check" ${r.enColegio ? 'checked' : ''}>
+          En el colegio
+        </label>`}
+        <button class="del-btn" title="Eliminar registro">×</button>
+      </div>`;
+  }
+
   async function renderRecords(){
     const list = $('#recordsList');
     list.innerHTML = '<div class="empty">Cargando...</div>';
@@ -1386,7 +1438,6 @@ Ana Martínez"></textarea>
       list.innerHTML = '<div class="empty">Todavía no hay registros de asistencia.</div>';
       return;
     }
-    records.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
     const fDoc = $('#filterDocente').value;
     const fTipo = $('#filterTipo').value;
     const fDesde = $('#filterFechaDesde').value;   // 'YYYY-MM-DD' o ''
@@ -1403,27 +1454,39 @@ Ana Martínez"></textarea>
       list.innerHTML = '<div class="empty">No hay registros con ese filtro.</div>';
       return;
     }
-    list.innerHTML = filtered.map(r=>{
-      const d = new Date(r.timestamp);
-      const dateStr = d.toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
-      const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-      const media = r.justificacion
-        ? `<div class="record-photo justificacion-thumb" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}">Justificado<br>(ver)</div>`
-        : `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`;
-      return `
-        <div class="record" data-id="${r.id}">
-          ${media}
-          <div class="info">
-            <div class="name">${r.docenteNumero ? r.docenteNumero + '. ' : ''}${escapeHtml(r.docente)}</div>
-            <div class="meta">${dateStr} · ${timeStr}</div>
-            <span class="badge ${r.tipo === 'Entrada' ? 'entrada' : 'salida'}">${r.tipo}</span>
-            ${r.justificacion ? '' : `
-            <label class="school-toggle">
-              <input type="checkbox" class="school-check" ${r.enColegio ? 'checked' : ''}>
-              En el colegio
-            </label>`}
-          </div>
+
+    // agrupa por colaborador + día, para mostrar entrada y salida juntas
+    const grupos = new Map();
+    filtered.forEach(r=>{
+      const fecha = r.timestamp.slice(0, 10);
+      const key = r.docente + '|' + fecha;
+      if(!grupos.has(key)){
+        grupos.set(key, { docente: r.docente, docenteNumero: r.docenteNumero, fecha, entrada: null, salida: null, ausencia: null, latest: r.timestamp });
+      }
+      const g = grupos.get(key);
+      if(r.tipo === 'Entrada') g.entrada = r;
+      else if(r.tipo === 'Salida') g.salida = r;
+      else if(r.tipo === 'Ausencia') g.ausencia = r;
+      if(new Date(r.timestamp) > new Date(g.latest)) g.latest = r.timestamp;
+    });
+    const gruposOrdenados = [...grupos.values()].sort((a,b) => new Date(b.latest) - new Date(a.latest));
+
+    list.innerHTML = gruposOrdenados.map(g=>{
+      const dateStr = new Date(g.fecha + 'T00:00:00').toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
+      let body;
+      if(g.ausencia){
+        body = `<div class="record-col" data-id="${g.ausencia.id}">
+          <div class="col-label">Ausencia</div>
+          <div class="justificacion-thumb" data-justificacion="${escapeHtml(g.ausencia.justificacion)}" data-name="${escapeHtml(g.docente)}" style="width:100%;height:auto;padding:10px;">Justificado (ver)</div>
           <button class="del-btn" title="Eliminar registro">×</button>
+        </div>`;
+      }else{
+        body = recordColumnHtml(g.entrada) + recordColumnHtml(g.salida);
+      }
+      return `
+        <div class="record-group">
+          <div class="record-group-header">${g.docenteNumero ? g.docenteNumero + '. ' : ''}${escapeHtml(g.docente)} <span class="muted" style="font-weight:400;">· ${dateStr}</span></div>
+          <div class="record-group-cols">${body}</div>
         </div>`;
     }).join('');
 
@@ -1440,14 +1503,14 @@ Ana Martínez"></textarea>
     });
     $$('.school-check', list).forEach(chk=>{
       chk.addEventListener('change', async (e)=>{
-        const id = e.target.closest('.record').dataset.id;
+        const id = e.target.closest('.record-col').dataset.id;
         await apiPost('updateEnColegio', { id, enColegio: e.target.checked });
       });
     });
-    $$('.record .del-btn', list).forEach(b=>{
+    $$('.record-col .del-btn', list).forEach(b=>{
       b.addEventListener('click', async (e)=>{
-        const row = e.target.closest('.record');
-        const id = row.dataset.id;
+        const col = e.target.closest('.record-col');
+        const id = col.dataset.id;
         if(!confirm('¿Eliminar este registro?')) return;
         await apiPost('deleteAsistencia', { id });
         renderRecords();
