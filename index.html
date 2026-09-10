@@ -1719,18 +1719,12 @@ Ana Martínez"></textarea>
     navigator.serviceWorker.register('./service-worker.js').then(reg=>{
       // revisa si hay una versión nueva cada vez que se abre la app
       reg.update();
-      reg.addEventListener('updatefound', ()=>{
-        const nuevo = reg.installing;
-        if(!nuevo) return;
-        nuevo.addEventListener('statechange', ()=>{
-          if(nuevo.state === 'activated'){
-            window.location.reload();
-          }
-        });
-      });
     }).catch(()=>{});
-    // si otra pestaña/instalación ya activó una versión nueva, recarga esta también
+    // recarga SOLO cuando de verdad hay un cambio de versión (no en la primera instalación)
+    let yaRecargando = false;
     navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(yaRecargando) return;
+      yaRecargando = true;
       window.location.reload();
     });
   }
