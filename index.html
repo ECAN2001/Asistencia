@@ -1703,18 +1703,17 @@ Ana Martínez"></textarea>
   loadDocentesIntoSelect();
   loadLogo();
 
+  // se quitó el service worker por los problemas de caché que causaba;
+  // esto borra activamente cualquier versión vieja que haya quedado instalada en el teléfono
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./service-worker.js').then(reg=>{
-      // revisa si hay una versión nueva cada vez que se abre la app
-      reg.update();
+    navigator.serviceWorker.getRegistrations().then(regs=>{
+      regs.forEach(reg => reg.unregister());
     }).catch(()=>{});
-    // recarga SOLO cuando de verdad hay un cambio de versión (no en la primera instalación)
-    let yaRecargando = false;
-    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
-      if(yaRecargando) return;
-      yaRecargando = true;
-      window.location.reload();
-    });
+  }
+  if(window.caches){
+    caches.keys().then(names=>{
+      names.forEach(name => caches.delete(name));
+    }).catch(()=>{});
   }
 })();
 </script>
