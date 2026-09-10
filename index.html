@@ -485,28 +485,16 @@ Ana Martínez"></textarea>
   <img id="lightboxImg" alt="Foto ampliada">
 </div>
 
-<div class="modal-overlay" id="installModal">
+<div class="modal-overlay" id="iosInstallModal">
   <div class="modal-sheet">
-    <h3>Instalar como app en tu celular</h3>
-    <p class="muted">Así te queda un ícono directo en la pantalla de inicio, sin abrir el navegador cada vez.</p>
-
-    <div><b style="font-size:13.5px;">En iPhone (Safari):</b></div>
+    <h3>Instalar en tu iPhone</h3>
+    <p class="muted">Safari no deja instalar apps automáticamente — se hace así, en unos segundos:</p>
     <ol class="install-steps">
-      <li>Abre este enlace en <b>Safari</b>.</li>
-      <li>Toca el botón <b>Compartir</b> (el cuadro con la flecha hacia arriba).</li>
-      <li>Elige <b>"Agregar a pantalla de inicio"</b>.</li>
+      <li>Toca el botón <b>Compartir</b> (el cuadro con la flecha hacia arriba, abajo en Safari).</li>
+      <li>Baja y elige <b>"Agregar a pantalla de inicio"</b>.</li>
       <li>Toca <b>Agregar</b>. Aparecerá el ícono de ECAN en tu pantalla.</li>
     </ol>
-
-    <div><b style="font-size:13.5px;">En Android (Chrome):</b></div>
-    <ol class="install-steps">
-      <li>Abre este enlace en <b>Chrome</b>.</li>
-      <li>Toca el menú <b>⋮</b> (arriba a la derecha).</li>
-      <li>Elige <b>"Agregar a pantalla de inicio"</b> o <b>"Instalar app"</b>.</li>
-      <li>Confirma. Aparecerá el ícono de ECAN en tu pantalla.</li>
-    </ol>
-
-    <button class="btn btn-secondary modal-close-btn" id="installModalClose">Entendido</button>
+    <button class="btn btn-secondary modal-close-btn" id="iosInstallModalClose">Entendido</button>
   </div>
 </div>
 
@@ -1637,17 +1625,18 @@ Ana Martínez"></textarea>
     e.preventDefault();
     deferredInstallPrompt = e;
   });
+  const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   $('#installLinkBtn').addEventListener('click', async ()=>{
     if(deferredInstallPrompt){
       deferredInstallPrompt.prompt();
       await deferredInstallPrompt.userChoice;
       deferredInstallPrompt = null;
-    }else{
-      $('#installModal').classList.add('active');
+    }else if(esIOS){
+      $('#iosInstallModal').classList.add('active');
     }
   });
-  $('#installModalClose').addEventListener('click', ()=> $('#installModal').classList.remove('active'));
-  $('#installModal').addEventListener('click', (e)=>{ if(e.target.id === 'installModal') $('#installModal').classList.remove('active'); });
+  $('#iosInstallModalClose').addEventListener('click', ()=> $('#iosInstallModal').classList.remove('active'));
+  $('#iosInstallModal').addEventListener('click', (e)=>{ if(e.target.id === 'iosInstallModal') $('#iosInstallModal').classList.remove('active'); });
 
   // ---------- logo del colegio ----------
   const DEFAULT_LOGO_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
