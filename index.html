@@ -322,7 +322,6 @@
       </div>
       <button class="btn btn-primary" id="pinSubmit">Entrar</button>
       <div class="error-box" id="pinError" style="display:none;">PIN incorrecto.</div>
-      <p class="muted" style="margin-top:16px;">PIN por defecto: 1234 (cámbialo en Configuración).</p>
     </div>
 
     <div id="adminContent" style="display:none;">
@@ -359,9 +358,31 @@
       <!-- Resumen del día -->
       <div class="admin-panel" id="panel-resumen" style="display:none;">
         <div class="section" style="padding-bottom:0;">
+          <label class="field-label">Colaborador</label>
+          <select id="resumenColaborador"><option value="">Todos (vista del día)</option></select>
+        </div>
+
+        <div class="section" id="resumenTodosControls" style="padding-top:10px;">
           <label class="field-label">Fecha</label>
           <input type="date" id="resumenFecha">
+          <label class="field-label" style="margin-top:14px;">Mostrar categorías</label>
+          <label class="justify-check"><input type="checkbox" class="resumenCat" value="aTiempo" checked> A tiempo (cumplen entrada y salida)</label>
+          <label class="justify-check"><input type="checkbox" class="resumenCat" value="retraso" checked> Entradas tarde</label>
+          <label class="justify-check"><input type="checkbox" class="resumenCat" value="salidaAntes" checked> Salidas antes</label>
+          <label class="justify-check"><input type="checkbox" class="resumenCat" value="ausente" checked> Ausentes</label>
         </div>
+
+        <div class="section" id="resumenPersonaControls" style="display:none;padding-top:10px;">
+          <label class="field-label">Periodo</label>
+          <div class="mode-row">
+            <div class="mode-btn active" id="periodoDia">Día</div>
+            <div class="mode-btn" id="periodoSemana">Semana</div>
+            <div class="mode-btn" id="periodoMes">Mes</div>
+          </div>
+          <label class="field-label" style="margin-top:12px;">Fecha de referencia</label>
+          <input type="date" id="resumenFechaPersona">
+        </div>
+
         <div class="section" id="resumenList"></div>
       </div>
 
@@ -1106,13 +1127,45 @@ Ana Martínez"></textarea>
     filterSel.value = currentFilter;
   }
 
-  // --- Resumen del día ---
+  // --- Resumen ---
   function todayLocalISO(){
     const d = new Date();
     const tz = d.getTimezoneOffset() * 60000;
     return new Date(d - tz).toISOString().slice(0, 10);
   }
-  $('#resumenFecha').addEventListener('change', renderResumen);
+  function isoDate(d){
+    const tz = d.getTimezoneOffset() * 60000;
+    return new Date(d - tz).toISOString().slice(0, 10);
+  }
+  function getWeekRange(dateStr){
+    const d = new Date(dateStr + 'T00:00:00');
+    const day = d.getDay(); // 0=Dom..6=Sáb
+    const diffToMonday = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(d); monday.setDate(d.getDate() + diffToMonday);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    return { start: isoDate(monday), end: isoDate(sunday) };
+  }
+  function getMonthRange(dateStr){
+    const d = new Date(dateStr + 'T00:00:00');
+    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return { start: isoDate(start), end: isoDate(end) };
+  }
+  function dateRangeList(startStr, endStr){
+    const out = [];
+    let cur = new Date(startStr + 'T00:00:00');
+    const end = new Date(endStr + 'T00:00:00');
+    while(cur <= end){
+      out.push(isoDate(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return out;
+  }
+  // extrae 'HH:MM' en hora local a partir de un timestamp ISO
+  function hora24(isoTimestamp){
+    const d = new Date(isoTimestamp);
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
 
   function resumenPersonLine(d, hora, badgeClass, badgeText, extra){
     return `
@@ -1134,8 +1187,53 @@ Ana Martínez"></textarea>
       </div>`;
   }
 
+  // --- selector colaborador / modo ---
+  async function populateResumenColaborador(){
+    const list = (await apiGet('getDocentes')) || [];
+    const sorted = [...list].sort((a,b) => a.numero - b.numero);
+    const sel = $('#resumenColaborador');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">Todos (vista del día)</option>' +
+      sorted.map(d => `<option value="${d.numero}">${d.numero}. ${escapeHtml(d.nombre)}</option>`).join('');
+    sel.value = current;
+  }
+
+  $('#resumenColaborador').addEventListener('change', ()=>{
+    const isPersona = !!$('#resumenColaborador').value;
+    $('#resumenTodosControls').style.display = isPersona ? 'none' : 'block';
+    $('#resumenPersonaControls').style.display = isPersona ? 'block' : 'none';
+    renderResumen();
+  });
+  $$('.resumenCat').forEach(chk => chk.addEventListener('change', renderResumen));
+  $('#resumenFecha').addEventListener('change', renderResumen);
+  $('#resumenFechaPersona').addEventListener('change', renderResumen);
+
+  let resumenPeriodo = 'dia';
+  $('#periodoDia').addEventListener('click', ()=> setResumenPeriodo('dia'));
+  $('#periodoSemana').addEventListener('click', ()=> setResumenPeriodo('semana'));
+  $('#periodoMes').addEventListener('click', ()=> setResumenPeriodo('mes'));
+  function setResumenPeriodo(p){
+    resumenPeriodo = p;
+    $('#periodoDia').classList.toggle('active', p === 'dia');
+    $('#periodoSemana').classList.toggle('active', p === 'semana');
+    $('#periodoMes').classList.toggle('active', p === 'mes');
+    renderResumen();
+  }
+
   async function renderResumen(){
+    await populateResumenColaborador();
     if(!$('#resumenFecha').value) $('#resumenFecha').value = todayLocalISO();
+    if(!$('#resumenFechaPersona').value) $('#resumenFechaPersona').value = todayLocalISO();
+
+    const numeroSeleccionado = $('#resumenColaborador').value;
+    if(numeroSeleccionado){
+      await renderResumenPersona(Number(numeroSeleccionado));
+    }else{
+      await renderResumenTodos();
+    }
+  }
+
+  async function renderResumenTodos(){
     const fecha = $('#resumenFecha').value;
     const box = $('#resumenList');
     box.innerHTML = '<div class="empty">Cargando...</div>';
@@ -1150,7 +1248,10 @@ Ana Martínez"></textarea>
       return;
     }
 
-    const asistencia = [], retrasos = [], salidasAntes = [], ausentes = [];
+    const activas = {};
+    $$('.resumenCat').forEach(chk => activas[chk.value] = chk.checked);
+
+    const aTiempo = [], retrasos = [], salidasAntes = [], ausentes = [];
 
     list.forEach(d=>{
       const ofDay = allRecords.filter(r => r.docente === d.nombre && r.timestamp.slice(0,10) === fecha);
@@ -1158,44 +1259,105 @@ Ana Martínez"></textarea>
       const salida = ofDay.find(r => r.tipo === 'Salida');
       const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
 
-      if(entrada){
-        const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-        const esTarde = d.horaEntrada && hora24(entrada.timestamp) > d.horaEntrada;
-        if(esTarde){
-          retrasos.push(resumenPersonLine(d, `Llegó: ${hora} (horario: ${d.horaEntrada})`, 'warn', 'Retraso',
-            entrada.justificacion ? 'Justificación: ' + escapeHtml(entrada.justificacion) : 'Sin justificar'));
-        }else{
-          asistencia.push(resumenPersonLine(d, `Entrada: ${hora}`, 'ok', 'A tiempo'));
-        }
-      }else if(ausenciaJustif){
-        ausentes.push(resumenPersonLine(d, '', 'pending', 'Ausente (justificado)', escapeHtml(ausenciaJustif.justificacion)));
-      }else{
+      const entradaOk = entrada && (!d.horaEntrada || hora24(entrada.timestamp) <= d.horaEntrada);
+      const entradaTarde = entrada && d.horaEntrada && hora24(entrada.timestamp) > d.horaEntrada;
+      const salidaOk = salida && (!d.horaSalida || hora24(salida.timestamp) >= d.horaSalida);
+      const salidaAntes = salida && d.horaSalida && hora24(salida.timestamp) < d.horaSalida;
+
+      if(!entrada && !ausenciaJustif){
         ausentes.push(resumenPersonLine(d, '', 'warn', 'Ausente (sin registro)'));
+      }else if(!entrada && ausenciaJustif){
+        ausentes.push(resumenPersonLine(d, '', 'pending', 'Ausente (justificado)', escapeHtml(ausenciaJustif.justificacion)));
       }
 
-      if(salida){
+      if(entradaTarde){
+        const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+        retrasos.push(resumenPersonLine(d, `Llegó: ${hora} (horario: ${d.horaEntrada})`, 'warn', 'Retraso',
+          entrada.justificacion ? 'Justificación: ' + escapeHtml(entrada.justificacion) : 'Sin justificar'));
+      }
+      if(salidaAntes){
         const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-        const esAntes = d.horaSalida && hora24(salida.timestamp) < d.horaSalida;
-        if(esAntes){
-          salidasAntes.push(resumenPersonLine(d, `Salió: ${hora} (horario: ${d.horaSalida})`, 'warn', 'Salida antes',
-            salida.justificacion ? 'Justificación: ' + escapeHtml(salida.justificacion) : 'Sin justificar'));
-        }
+        salidasAntes.push(resumenPersonLine(d, `Salió: ${hora} (horario: ${d.horaSalida})`, 'warn', 'Salida antes',
+          salida.justificacion ? 'Justificación: ' + escapeHtml(salida.justificacion) : 'Sin justificar'));
+      }
+      if(entradaOk && salidaOk){
+        const horaE = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+        const horaS = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+        aTiempo.push(resumenPersonLine(d, `Entrada: ${horaE} · Salida: ${horaS}`, 'ok', 'A tiempo'));
       }
     });
 
-    box.innerHTML =
-      resumenSection('Asistencia (a tiempo)', { html: asistencia.join(''), count: asistencia.length }, 'Nadie en esta categoría hoy.') +
-      resumenSection('Retraso en entrada', { html: retrasos.join(''), count: retrasos.length }, 'Nadie llegó tarde hoy.') +
-      resumenSection('Salida antes de tiempo', { html: salidasAntes.join(''), count: salidasAntes.length }, 'Nadie salió antes hoy.') +
-      resumenSection('Ausentes', { html: ausentes.join(''), count: ausentes.length }, 'Nadie ausente hoy.');
+    let html = '';
+    if(activas.aTiempo) html += resumenSection('A tiempo (cumplen entrada y salida)', { html: aTiempo.join(''), count: aTiempo.length }, 'Nadie en esta categoría hoy.');
+    if(activas.retraso) html += resumenSection('Entradas tarde', { html: retrasos.join(''), count: retrasos.length }, 'Nadie llegó tarde hoy.');
+    if(activas.salidaAntes) html += resumenSection('Salidas antes', { html: salidasAntes.join(''), count: salidasAntes.length }, 'Nadie salió antes hoy.');
+    if(activas.ausente) html += resumenSection('Ausentes', { html: ausentes.join(''), count: ausentes.length }, 'Nadie ausente hoy.');
+    box.innerHTML = html || '<div class="empty">Selecciona al menos una categoría.</div>';
   }
 
-  // extrae 'HH:MM' en hora local a partir de un timestamp ISO
-  function hora24(isoTimestamp){
-    const d = new Date(isoTimestamp);
-    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-  }
+  async function renderResumenPersona(numero){
+    const box = $('#resumenList');
+    box.innerHTML = '<div class="empty">Cargando...</div>';
+    const [docentesList, records] = await Promise.all([
+      apiGet('getDocentes'),
+      apiGet('getAsistencia')
+    ]);
+    const d = (docentesList || []).find(x => x.numero === numero);
+    if(!d){
+      box.innerHTML = '<div class="empty">Colaborador no encontrado.</div>';
+      return;
+    }
+    const fechaRef = $('#resumenFechaPersona').value;
+    let range;
+    if(resumenPeriodo === 'semana') range = getWeekRange(fechaRef);
+    else if(resumenPeriodo === 'mes') range = getMonthRange(fechaRef);
+    else range = { start: fechaRef, end: fechaRef };
 
+    const dias = dateRangeList(range.start, range.end);
+    const allRecords = (records || []).filter(r => r.docente === d.nombre);
+
+    const filasHtml = dias.map(fecha=>{
+      const ofDay = allRecords.filter(r => r.timestamp.slice(0,10) === fecha);
+      const entrada = ofDay.find(r => r.tipo === 'Entrada');
+      const salida = ofDay.find(r => r.tipo === 'Salida');
+      const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
+      const fechaLabel = new Date(fecha + 'T00:00:00').toLocaleDateString('es-SV', { weekday:'short', day:'numeric', month:'short' });
+
+      let linea;
+      if(entrada || salida){
+        const partes = [];
+        if(entrada){
+          const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+          const tarde = d.horaEntrada && hora24(entrada.timestamp) > d.horaEntrada;
+          partes.push(`Entrada ${hora}${tarde ? ' <span class="estado-tag warn">Retraso</span>' : ' <span class="estado-tag ok">A tiempo</span>'}`);
+        }
+        if(salida){
+          const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+          const antes = d.horaSalida && hora24(salida.timestamp) < d.horaSalida;
+          partes.push(`Salida ${hora}${antes ? ' <span class="estado-tag warn">Antes</span>' : ' <span class="estado-tag ok">A tiempo</span>'}`);
+        }
+        linea = partes.join(' · ');
+      }else if(ausenciaJustif){
+        linea = `<span class="estado-tag pending">Ausente (justificado)</span>: ${escapeHtml(ausenciaJustif.justificacion)}`;
+      }else{
+        linea = `<span class="estado-tag warn">Ausente (sin registro)</span>`;
+      }
+
+      return `
+        <div class="record" style="padding:10px 0;">
+          <div class="info">
+            <div class="name">${fechaLabel}</div>
+            <div class="meta" style="margin-top:4px;">${linea}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    box.innerHTML = `
+      <div class="resumen-section">
+        <div class="resumen-section-title">${d.numero}. ${escapeHtml(d.nombre)} — ${range.start} a ${range.end}</div>
+        ${filasHtml}
+      </div>`;
+  }
 
 
   // --- PIN config ---
