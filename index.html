@@ -222,20 +222,11 @@
 
     <div class="section" id="doc-step-name">
       <label class="field-label">Identifícate</label>
-      <div class="mode-row" style="margin-top:0;margin-bottom:10px;">
-        <div class="mode-btn active" id="modeByName">Elegir mi nombre</div>
-        <div class="mode-btn" id="modeByNumber">Escribir mi número</div>
-      </div>
 
       <div id="byNameWrap">
         <select id="docenteSelect">
           <option value="">— Elige tu nombre —</option>
         </select>
-      </div>
-
-      <div id="byNumberWrap" style="display:none;">
-        <input type="number" inputmode="numeric" id="docenteNumberInput" placeholder="Tu número de colaborador">
-        <div class="muted" id="numberMatchMsg" style="margin-top:8px;"></div>
       </div>
 
       <div class="muted" id="noDocentesMsg" style="display:none;margin-top:8px;">
@@ -680,44 +671,10 @@ Ana Martínez"></textarea>
     }
   }
 
-  // --- modo de identificación: por nombre o por número ---
-  $('#modeByName').addEventListener('click', ()=> setIdMode('name'));
-  $('#modeByNumber').addEventListener('click', ()=> setIdMode('number'));
-
-  function setIdMode(mode){
-    $('#modeByName').classList.toggle('active', mode === 'name');
-    $('#modeByNumber').classList.toggle('active', mode === 'number');
-    $('#byNameWrap').style.display = mode === 'name' ? 'block' : 'none';
-    $('#byNumberWrap').style.display = mode === 'number' ? 'block' : 'none';
-    selectedDocente = '';
-    selectedDocenteNumero = null;
-    $('#docenteSelect').value = '';
-    $('#docenteNumberInput').value = '';
-    $('#numberMatchMsg').textContent = '';
-    $('#confirmIdentityBtn').disabled = true;
-  }
-
   $('#docenteSelect').addEventListener('change', e=>{
     selectedDocente = e.target.value;
     const match = docentes.find(d => d.nombre === selectedDocente);
     selectedDocenteNumero = match ? match.numero : null;
-    $('#confirmIdentityBtn').disabled = !selectedDocente;
-  });
-
-  $('#docenteNumberInput').addEventListener('input', e=>{
-    const num = parseInt(e.target.value, 10);
-    const match = docentes.find(d => d.numero === num);
-    if(match){
-      selectedDocente = match.nombre;
-      selectedDocenteNumero = match.numero;
-      $('#numberMatchMsg').textContent = `→ ${match.numero}. ${match.nombre}`;
-      $('#numberMatchMsg').style.color = 'var(--ok)';
-    }else{
-      selectedDocente = '';
-      selectedDocenteNumero = null;
-      $('#numberMatchMsg').textContent = e.target.value ? 'Número no encontrado.' : '';
-      $('#numberMatchMsg').style.color = 'var(--warn)';
-    }
     $('#confirmIdentityBtn').disabled = !selectedDocente;
   });
 
