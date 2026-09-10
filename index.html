@@ -153,6 +153,14 @@
   .docente-card .horario-row input[type=time]{font-size:13px;padding:7px 8px;}
   .docente-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}
 
+  .save-all-bar{display:flex;align-items:center;gap:12px;margin-top:16px;position:sticky;bottom:0;background:var(--white);
+    padding:10px 0;border-top:1px solid var(--line);}
+  .save-all-btn{padding:12px 20px;border-radius:9px;border:none;font-size:14.5px;font-weight:700;cursor:pointer;
+    background:var(--navy);color:var(--white);transition:background .2s;}
+  .save-all-btn:disabled{cursor:not-allowed;opacity:0.75;background:var(--muted);}
+  .save-all-btn.save-ok{background:var(--ok);color:var(--white);}
+  .save-all-btn.save-fail{background:#E8B23D;color:var(--navy-dark);}
+
   .filters{display:flex;gap:8px;padding:14px 20px 0;}
   .filters select{font-size:13px;padding:9px 10px;}
 
@@ -433,6 +441,11 @@ Ana Martínez"></textarea>
           <div class="muted" id="bulkAddedMsg" style="display:none;margin-top:6px;"></div>
 
           <div id="docentesList" style="margin-top:18px;"></div>
+
+          <div class="save-all-bar">
+            <button class="save-all-btn" id="guardarCambiosBtn">💾 Guardar cambios</button>
+            <span class="muted" id="guardarCambiosMsg"></span>
+          </div>
         </div>
       </div>
 
@@ -1086,6 +1099,49 @@ Ana Martínez"></textarea>
     return '<span class="estado-tag pending">Pendiente de aceptar</span>';
   }
 
+  $('#guardarCambiosBtn').addEventListener('click', async ()=>{
+    const btn = $('#guardarCambiosBtn');
+    const msg = $('#guardarCambiosMsg');
+    btn.disabled = true;
+    btn.classList.remove('save-ok', 'save-fail');
+    btn.textContent = '💾 Guardando...';
+    msg.textContent = '';
+
+    const cards = $$('.docente-card', $('#docentesList'));
+    const updated = cards.map(card=>{
+      const numero = Number(card.dataset.numero);
+      const base = docentes.find(d => d.numero === numero) || {};
+      return {
+        numero,
+        nombre: $('.nombre-input', card).value.trim() || base.nombre,
+        horaEntrada: $('.hora-entrada-input', card).value,
+        horaSalida: $('.hora-salida-input', card).value,
+        resetToken: base.resetToken || 0,
+        horarioAceptado: base.horarioAceptado || false,
+        horarioRechazado: base.horarioRechazado || false
+      };
+    });
+
+    const result = await apiPost('saveDocentes', { docentes: updated });
+    btn.disabled = false;
+
+    if(result && result.ok){
+      btn.classList.add('save-ok');
+      btn.textContent = '💾 Guardado';
+      setTimeout(()=>{
+        btn.classList.remove('save-ok');
+        btn.textContent = '💾 Guardar cambios';
+      }, 2500);
+    }else{
+      btn.classList.add('save-fail');
+      btn.textContent = '💾 Guardar cambios';
+      msg.textContent = 'No se guardó. Intenta de nuevo.';
+      msg.style.color = 'var(--warn)';
+      setTimeout(()=>{ btn.classList.remove('save-fail'); }, 3500);
+    }
+    renderDocentesAdmin();
+  });
+
   async function renderDocentesAdmin(){
     const list = (await apiGet('getDocentes')) || [];
     const sorted = [...list].sort((a,b) => a.numero - b.numero);
@@ -1099,7 +1155,6 @@ Ana Martínez"></textarea>
             <div class="name-edit">
               <b>${d.numero}.</b>
               <input type="text" class="nombre-input" value="${escapeHtml(d.nombre)}" style="flex:1;">
-              <button class="icon-btn save-nombre-btn" title="Guardar nombre">💾</button>
             </div>
             <button class="del-btn" title="Eliminar">×</button>
           </div>
@@ -1127,25 +1182,6 @@ Ana Martínez"></textarea>
           const updated = current.filter(d => d.numero !== numero);
           await apiPost('saveDocentes', { docentes: updated });
           renderDocentesAdmin();
-        });
-      });
-      $$('.save-nombre-btn', box).forEach(b=>{
-        b.addEventListener('click', async ()=>{
-          const card = b.closest('.docente-card');
-          const numero = Number(card.dataset.numero);
-          const nuevoNombre = $('.nombre-input', card).value.trim();
-          if(!nuevoNombre) return;
-          await apiPost('updateDocenteNombre', { numero, nombre: nuevoNombre });
-          renderDocentesAdmin();
-        });
-      });
-      $$('.hora-entrada-input, .hora-salida-input', box).forEach(inp=>{
-        inp.addEventListener('change', async ()=>{
-          const card = inp.closest('.docente-card');
-          const numero = Number(card.dataset.numero);
-          const horaEntrada = $('.hora-entrada-input', card).value;
-          const horaSalida = $('.hora-salida-input', card).value;
-          await apiPost('updateDocenteHorario', { numero, horaEntrada, horaSalida });
         });
       });
       $$('.reiniciar-btn', box).forEach(b=>{
