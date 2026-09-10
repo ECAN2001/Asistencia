@@ -1058,10 +1058,11 @@ Ana Martínez"></textarea>
     msg.textContent = '';
 
     const cards = $$('.docente-card', $('#docentesList'));
-    const updated = cards.map(card=>{
+    const porNumero = new Map(); // deduplica por número — si hay tarjetas repetidas, se queda con la última
+    cards.forEach(card=>{
       const numero = Number(card.dataset.numero);
       const base = docentes.find(d => d.numero === numero) || {};
-      return {
+      porNumero.set(numero, {
         numero,
         nombre: $('.nombre-input', card).value.trim() || base.nombre,
         horaEntrada: $('.hora-entrada-input', card).value,
@@ -1069,8 +1070,9 @@ Ana Martínez"></textarea>
         resetToken: base.resetToken || 0,
         horarioAceptado: base.horarioAceptado || false,
         horarioRechazado: base.horarioRechazado || false
-      };
+      });
     });
+    const updated = [...porNumero.values()];
 
     const result = await apiPost('saveDocentes', { docentes: updated });
     btn.disabled = false;
@@ -1138,6 +1140,9 @@ Ana Martínez"></textarea>
         b.addEventListener('click', async ()=>{
           const numero = Number(b.closest('.docente-card').dataset.numero);
           if(!confirm('Esto permitirá que ese colaborador vuelva a elegir su identidad en su dispositivo y le pedirá aceptar el horario de nuevo. ¿Continuar?')) return;
+          b.disabled = true;
+          const textoOriginal = b.textContent;
+          b.textContent = 'Procesando...';
           await apiPost('reiniciarDocente', { numero });
           renderDocentesAdmin();
         });
