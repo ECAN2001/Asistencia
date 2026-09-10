@@ -1015,6 +1015,9 @@ Ana Martínez"></textarea>
   $('#pinInput').addEventListener('keydown', e=>{ if(e.key === 'Enter') checkPin(); });
 
   async function checkPin(){
+    const btn = $('#pinSubmit');
+    btn.disabled = true;
+    btn.textContent = 'Verificando...';
     const entrada = $('#pinInput').value;
     const result = await apiPost('verifyPin', { pin: entrada });
     if(result && result.ok){
@@ -1025,6 +1028,8 @@ Ana Martínez"></textarea>
       renderAdmin();
     }else{
       $('#pinError').style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
     }
   }
 
@@ -1711,7 +1716,23 @@ Ana Martínez"></textarea>
   loadLogo();
 
   if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+    navigator.serviceWorker.register('./service-worker.js').then(reg=>{
+      // revisa si hay una versión nueva cada vez que se abre la app
+      reg.update();
+      reg.addEventListener('updatefound', ()=>{
+        const nuevo = reg.installing;
+        if(!nuevo) return;
+        nuevo.addEventListener('statechange', ()=>{
+          if(nuevo.state === 'activated'){
+            window.location.reload();
+          }
+        });
+      });
+    }).catch(()=>{});
+    // si otra pestaña/instalación ya activó una versión nueva, recarga esta también
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      window.location.reload();
+    });
   }
 })();
 </script>
