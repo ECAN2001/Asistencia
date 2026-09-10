@@ -1632,11 +1632,6 @@ Ana Martínez"></textarea>
   $('#lightbox').addEventListener('click', (e)=>{ if(e.target.id === 'lightbox') $('#lightbox').classList.remove('active'); });
 
   // ---------- instalar en el celular ----------
-  $('#installLinkBtn').addEventListener('click', ()=> $('#installModal').classList.add('active'));
-  $('#installModalClose').addEventListener('click', ()=> $('#installModal').classList.remove('active'));
-  $('#installModal').addEventListener('click', (e)=>{ if(e.target.id === 'installModal') $('#installModal').classList.remove('active'); });
-
-  // si el navegador soporta instalación nativa (Chrome/Android), úsala directamente
   let deferredInstallPrompt = null;
   window.addEventListener('beforeinstallprompt', (e)=>{
     e.preventDefault();
@@ -1647,8 +1642,12 @@ Ana Martínez"></textarea>
       deferredInstallPrompt.prompt();
       await deferredInstallPrompt.userChoice;
       deferredInstallPrompt = null;
+    }else{
+      $('#installModal').classList.add('active');
     }
   });
+  $('#installModalClose').addEventListener('click', ()=> $('#installModal').classList.remove('active'));
+  $('#installModal').addEventListener('click', (e)=>{ if(e.target.id === 'installModal') $('#installModal').classList.remove('active'); });
 
   // ---------- logo del colegio ----------
   const DEFAULT_LOGO_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
