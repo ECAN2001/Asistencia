@@ -122,6 +122,12 @@
   .record-col .school-toggle{font-size:11px;}
   .record-col.empty-col{justify-content:center;padding:20px 0;}
   .record-col .del-btn{position:absolute;top:-4px;right:-2px;}
+  .select-bar{display:flex;align-items:center;gap:10px;padding:14px 20px 0;flex-wrap:wrap;}
+  .select-check{display:none;position:absolute;top:-6px;left:-4px;width:18px;height:18px;z-index:2;}
+  #recordsList.select-mode .select-check{display:block;}
+  #recordsList.select-mode .record-col .del-btn{display:none;}
+  #recordsList.select-mode .record-col{outline:1.5px dashed transparent;border-radius:8px;transition:outline-color .15s;}
+  #recordsList.select-mode .record-col.is-selected{outline-color:var(--gold);background:#FBF6E9;}
   .justificacion-thumb{width:64px;height:64px;border-radius:8px;flex-shrink:0;background:#EEF2F5;color:var(--navy);
     display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;text-align:center;line-height:1.3;cursor:pointer;}
   .record .info{flex:1;min-width:0;}
@@ -364,6 +370,14 @@
           <div style="flex:1;">
             <label class="field-label" style="font-size:11px;margin-bottom:3px;">Hasta</label>
             <input type="date" id="filterFechaHasta">
+          </div>
+        </div>
+        <div class="select-bar">
+          <button class="btn btn-ghost" id="toggleSelectBtn" style="width:auto;padding:8px 14px;font-size:13px;">Seleccionar varios</button>
+          <div id="selectActionBar" style="display:none;align-items:center;gap:10px;">
+            <span class="muted" id="selectCount">0 seleccionados</span>
+            <button class="btn btn-danger" id="deleteSelectedBtn" style="width:auto;padding:8px 14px;font-size:13px;">Eliminar</button>
+            <button class="btn btn-ghost" id="cancelSelectBtn" style="width:auto;padding:8px 14px;font-size:13px;">Cancelar</button>
           </div>
         </div>
         <div class="section" id="recordsList"></div>
@@ -1418,6 +1432,7 @@ Ana Martínez"></textarea>
       : `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`;
     return `
       <div class="record-col" data-id="${r.id}">
+        <input type="checkbox" class="select-check" data-id="${r.id}">
         <div class="col-label">${r.tipo}</div>
         ${media}
         <div class="meta">${timeStr}</div>
@@ -1476,6 +1491,7 @@ Ana Martínez"></textarea>
       let body;
       if(g.ausencia){
         body = `<div class="record-col" data-id="${g.ausencia.id}">
+          <input type="checkbox" class="select-check" data-id="${g.ausencia.id}">
           <div class="col-label">Ausencia</div>
           <div class="justificacion-thumb" data-justificacion="${escapeHtml(g.ausencia.justificacion)}" data-name="${escapeHtml(g.docente)}" style="width:100%;height:auto;padding:10px;">Justificado (ver)</div>
           <button class="del-btn" title="Eliminar registro">×</button>
@@ -1516,7 +1532,60 @@ Ana Martínez"></textarea>
         renderRecords();
       });
     });
+    $$('.select-check', list).forEach(chk=>{
+      chk.checked = selectedIds.has(chk.dataset.id);
+      chk.addEventListener('change', (e)=>{
+        const id = e.target.dataset.id;
+        const col = e.target.closest('.record-col');
+        if(e.target.checked){ selectedIds.add(id); col.classList.add('is-selected'); }
+        else{ selectedIds.delete(id); col.classList.remove('is-selected'); }
+        updateSelectCount();
+      });
+    });
+    list.classList.toggle('select-mode', selectMode);
   }
+
+  // --- selección múltiple para eliminar ---
+  let selectMode = false;
+  let selectedIds = new Set();
+
+  function updateSelectCount(){
+    $('#selectCount').textContent = `${selectedIds.size} seleccionados`;
+    $('#deleteSelectedBtn').disabled = selectedIds.size === 0;
+  }
+
+  $('#toggleSelectBtn').addEventListener('click', ()=>{
+    selectMode = true;
+    selectedIds.clear();
+    $('#toggleSelectBtn').style.display = 'none';
+    $('#selectActionBar').style.display = 'flex';
+    updateSelectCount();
+    $('#recordsList').classList.add('select-mode');
+  });
+
+  $('#cancelSelectBtn').addEventListener('click', ()=>{
+    selectMode = false;
+    selectedIds.clear();
+    $('#toggleSelectBtn').style.display = 'inline-block';
+    $('#selectActionBar').style.display = 'none';
+    $('#recordsList').classList.remove('select-mode');
+    $$('.record-col.is-selected', $('#recordsList')).forEach(c => c.classList.remove('is-selected'));
+    $$('.select-check', $('#recordsList')).forEach(c => c.checked = false);
+  });
+
+  $('#deleteSelectedBtn').addEventListener('click', async ()=>{
+    if(!selectedIds.size) return;
+    if(!confirm(`¿Eliminar ${selectedIds.size} registro(s)? Esta acción no se puede deshacer.`)) return;
+    $('#deleteSelectedBtn').disabled = true;
+    $('#deleteSelectedBtn').textContent = 'Eliminando...';
+    await Promise.all([...selectedIds].map(id => apiPost('deleteAsistencia', { id })));
+    $('#deleteSelectedBtn').textContent = 'Eliminar';
+    selectMode = false;
+    selectedIds.clear();
+    $('#toggleSelectBtn').style.display = 'inline-block';
+    $('#selectActionBar').style.display = 'none';
+    renderRecords();
+  });
 
   $('#lightboxClose').addEventListener('click', ()=> $('#lightbox').classList.remove('active'));
   $('#lightbox').addEventListener('click', (e)=>{ if(e.target.id === 'lightbox') $('#lightbox').classList.remove('active'); });
