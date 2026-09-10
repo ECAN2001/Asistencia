@@ -91,7 +91,8 @@
 
   .camera-wrap{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:3/4;}
   video, .shot-preview{width:100%;height:100%;object-fit:cover;display:block;}
-  .camera-hint{position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#fff;font-size:12px;opacity:0.85;}
+  .camera-hint{position:absolute;top:10px;left:0;right:0;text-align:center;color:#fff;font-size:16px;font-weight:700;
+    text-shadow:0 1px 4px rgba(0,0,0,0.6);padding:0 10px;}
 
   .capture-fab{width:64px;height:64px;border-radius:50%;background:var(--white);border:4px solid var(--gold);
     margin:16px auto 0;display:block;cursor:pointer;}
@@ -227,6 +228,7 @@
         <select id="docenteSelect">
           <option value="">— Elige tu nombre —</option>
         </select>
+        <div class="horario-box" id="horarioPreviewBox" style="display:none;"></div>
       </div>
 
       <div class="muted" id="noDocentesMsg" style="display:none;margin-top:8px;">
@@ -676,6 +678,15 @@ Ana Martínez"></textarea>
     const match = docentes.find(d => d.nombre === selectedDocente);
     selectedDocenteNumero = match ? match.numero : null;
     $('#confirmIdentityBtn').disabled = !selectedDocente;
+
+    const box = $('#horarioPreviewBox');
+    if(match && (match.horaEntrada || match.horaSalida)){
+      box.style.display = 'block';
+      box.innerHTML = `<div>Hora de entrada: <b>${match.horaEntrada || 'No definida'}</b></div>
+        <div>Hora de salida: <b>${match.horaSalida || 'No definida'}</b></div>`;
+    }else{
+      box.style.display = 'none';
+    }
   });
 
   $('#confirmIdentityBtn').addEventListener('click', ()=>{
@@ -804,7 +815,13 @@ Ana Martínez"></textarea>
         video: { facingMode: { ideal: 'environment' } },
         audio: false
       });
-      $('#video').srcObject = stream;
+      const video = $('#video');
+      video.srcObject = stream;
+      // espera a que el video tenga un frame real listo, para no capturar una imagen negra
+      await new Promise(resolve=>{
+        if(video.readyState >= 2 && video.videoWidth > 0){ resolve(); return; }
+        video.addEventListener('loadeddata', resolve, { once: true });
+      });
       $('#cameraIdle').style.display = 'none';
       $('#cameraLive').style.display = 'block';
       $('#cameraPreview').style.display = 'none';
@@ -816,6 +833,11 @@ Ana Martínez"></textarea>
 
   $('#captureBtn').addEventListener('click', ()=>{
     const video = $('#video');
+    if(!video.videoWidth){
+      $('#cameraError').style.display = 'block';
+      $('#cameraError').textContent = 'La cámara todavía no está lista. Espera un segundo e inténtalo de nuevo.';
+      return;
+    }
     const canvas = document.createElement('canvas');
     const maxW = 640;
     const scale = Math.min(1, maxW / video.videoWidth);
