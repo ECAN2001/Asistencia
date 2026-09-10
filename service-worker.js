@@ -2,7 +2,7 @@
 // Su único propósito es cumplir el requisito técnico para que
 // el navegador ofrezca "Instalar app" en vez de solo un acceso directo.
 
-const CACHE_NAME = 'ecan-asistencia-v1';
+const CACHE_NAME = 'ecan-asistencia-v2';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
