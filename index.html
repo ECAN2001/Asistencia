@@ -1000,14 +1000,31 @@ Ana Martínez"></textarea>
     }
   }
 
+  let docentesDirty = false;
+  $('#docentesList').addEventListener('input', (e)=>{
+    if(e.target.matches('.nombre-input, .hora-entrada-input, .hora-salida-input')){
+      docentesDirty = true;
+      const msg = $('#guardarCambiosMsg');
+      msg.textContent = 'Tienes cambios sin guardar.';
+      msg.style.color = 'var(--gold)';
+    }
+  });
+
   $$('.admin-nav button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
+      const estabaEnDocentes = $('#panel-docentes').style.display !== 'none';
+      if(docentesDirty && estabaEnDocentes && btn.dataset.panel !== 'docentes'){
+        if(!confirm('Tienes cambios de colaboradores sin guardar. Si sales de esta pestaña sin darle a "Guardar cambios", se perderán. ¿Salir de todos modos?')){
+          return;
+        }
+        docentesDirty = false;
+      }
       $$('.admin-nav button').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       $$('.admin-panel').forEach(p=>p.style.display='none');
       $('#panel-'+btn.dataset.panel).style.display = 'block';
       if(btn.dataset.panel === 'registros') renderRecords();
-      if(btn.dataset.panel === 'docentes') renderDocentesAdmin();
+      if(btn.dataset.panel === 'docentes' && !docentesDirty) renderDocentesAdmin();
       if(btn.dataset.panel === 'resumen') renderResumen();
     });
   });
@@ -1100,20 +1117,22 @@ Ana Martínez"></textarea>
     btn.disabled = false;
 
     if(result && result.ok){
+      docentesDirty = false;
       btn.classList.add('save-ok');
       btn.textContent = '💾 Guardado';
       setTimeout(()=>{
         btn.classList.remove('save-ok');
         btn.textContent = '💾 Guardar cambios';
       }, 2500);
+      renderDocentesAdmin();
     }else{
       btn.classList.add('save-fail');
       btn.textContent = '💾 Guardar cambios';
-      msg.textContent = 'No se guardó. Intenta de nuevo.';
+      msg.textContent = 'No se guardó. Tus cambios siguen aquí abajo — intenta de nuevo.';
       msg.style.color = 'var(--warn)';
       setTimeout(()=>{ btn.classList.remove('save-fail'); }, 3500);
+      // OJO: si falló, NO se vuelve a renderizar, para no perder lo que escribiste
     }
-    renderDocentesAdmin();
   });
 
   async function renderDocentesAdmin(){
