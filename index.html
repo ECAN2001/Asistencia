@@ -763,23 +763,50 @@ Ana Martínez"></textarea>
     $('#openCameraBtn').disabled = !selectedTipo;
   }
 
-  function checkTardanza(){
-    const serverDoc = docentes.find(d => d.numero === selectedDocenteNumero);
-    const nowHHMM = hora24(new Date().toISOString());
-    tardanzaRequerida = false;
-    let msg = '';
-    if(serverDoc && selectedTipo === 'Entrada' && serverDoc.horaEntrada && nowHHMM > serverDoc.horaEntrada){
-      tardanzaRequerida = true;
-      msg = `Tu horario de entrada es ${serverDoc.horaEntrada} y ya son las ${nowHHMM}. Debes justificar el retraso para continuar.`;
+  // trae el horario más reciente del colaborador desde el servidor (por si el celular
+  // tenía la app abierta desde antes de que el administrador pusiera/cambiara el horario)
+  async function obtenerHorarioActual(){
+    const lista = await apiGet('getDocentes');
+    if(lista) docentes = lista;
+    return docentes.find(d => d.numero === selectedDocenteNumero);
+  }
+
+  async function calcularTardanza(){
+    const serverDoc = await obtenerHorarioActual();
+    let required = false, msg = '';
+    if(serverDoc && selectedTipo === 'Entrada' && esTarde(new Date().toISOString(), serverDoc.horaEntrada)){
+      required = true;
+      msg = `Tu horario de entrada es ${serverDoc.horaEntrada} y ya son las ${hora24(new Date().toISOString())}. Debes justificar el retraso para continuar.`;
     }
-    if(serverDoc && selectedTipo === 'Salida' && serverDoc.horaSalida && nowHHMM < serverDoc.horaSalida){
-      tardanzaRequerida = true;
-      msg = `Tu horario de salida es ${serverDoc.horaSalida} y aún son las ${nowHHMM}. Debes justificar la salida antes de tiempo para continuar.`;
+    if(serverDoc && selectedTipo === 'Salida' && esAntes(new Date().toISOString(), serverDoc.horaSalida)){
+      required = true;
+      msg = `Tu horario de salida es ${serverDoc.horaSalida} y aún son las ${hora24(new Date().toISOString())}. Debes justificar la salida antes de tiempo para continuar.`;
     }
-    $('#tardanzaWrap').style.display = tardanzaRequerida ? 'block' : 'none';
+    return { required, msg };
+  }
+
+  async function checkTardanza(){
+    const { required, msg } = await calcularTardanza();
+    tardanzaRequerida = required;
+    $('#tardanzaWrap').style.display = required ? 'block' : 'none';
     $('#tardanzaMsg').textContent = msg;
     $('#tardanzaText').value = '';
     $('#tardanzaText').style.borderColor = '';
+  }
+
+  // se llama justo antes de guardar: por si pasó tiempo entre elegir Entrada/Salida y guardar
+  // (abrir cámara, tomar la foto...) y en ese lapso cruzó la hora de su horario,
+  // o el horario cambió del lado del administrador mientras tanto
+  async function revalidarTardanzaAntesDeGuardar(){
+    const { required, msg } = await calcularTardanza();
+    if(required && !tardanzaRequerida){
+      tardanzaRequerida = true;
+      $('#tardanzaWrap').style.display = 'block';
+      $('#tardanzaMsg').textContent = msg;
+      return false; // bloquea este intento, para que alcancen a escribir el motivo
+    }
+    tardanzaRequerida = required;
+    return true;
   }
 
   // --- justificar ausencia / retraso / salida antes (sin entrada/salida ni foto) ---
@@ -908,7 +935,11 @@ Ana Martínez"></textarea>
     return base ? `${base} | ${$('#tardanzaText').value.trim()}` : $('#tardanzaText').value.trim();
   }
 
-  $('#saveRecordBtn').addEventListener('click', ()=>{
+  $('#saveRecordBtn').addEventListener('click', async ()=>{
+    if(!(await revalidarTardanzaAntesDeGuardar())){
+      $('#tardanzaText').focus();
+      return;
+    }
     if(tardanzaRequerida && !$('#tardanzaText').value.trim()){
       $('#tardanzaText').style.borderColor = 'var(--warn)';
       $('#tardanzaText').focus();
@@ -917,11 +948,15 @@ Ana Martínez"></textarea>
     submitRecord(capturedDataUrl, combinarJustificacion(''), $('#saveRecordBtn'), 'Guardar registro');
   });
 
-  $('#saveJustifyBtn').addEventListener('click', ()=>{
+  $('#saveJustifyBtn').addEventListener('click', async ()=>{
     const text = $('#justifyText').value.trim();
     if(!text){
       $('#justifyText').style.borderColor = 'var(--warn)';
       $('#justifyText').focus();
+      return;
+    }
+    if(!(await revalidarTardanzaAntesDeGuardar())){
+      $('#tardanzaText').focus();
       return;
     }
     if(tardanzaRequerida && !$('#tardanzaText').value.trim()){
@@ -1242,6 +1277,28 @@ Ana Martínez"></textarea>
     const d = new Date(isoTimestamp);
     return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
   }
+  // convierte "H:MM" o "HH:MM" (con o sin cero adelante) a minutos totales, para comparar de forma numérica y no como texto
+  function aMinutos(hhmm){
+    if(!hhmm) return null;
+    const partes = String(hhmm).split(':');
+    if(partes.length < 2) return null;
+    const h = parseInt(partes[0], 10);
+    const m = parseInt(partes[1], 10);
+    if(isNaN(h) || isNaN(m)) return null;
+    return h * 60 + m;
+  }
+  // true si el timestamp real quedó DESPUÉS de la hora programada (retraso de entrada)
+  function esTarde(timestampIso, horaProgramada){
+    const prog = aMinutos(horaProgramada);
+    if(prog === null) return false;
+    return aMinutos(hora24(timestampIso)) > prog;
+  }
+  // true si el timestamp real quedó ANTES de la hora programada (salida antes de tiempo)
+  function esAntes(timestampIso, horaProgramada){
+    const prog = aMinutos(horaProgramada);
+    if(prog === null) return false;
+    return aMinutos(hora24(timestampIso)) < prog;
+  }
 
   function resumenPersonLine(d, hora, badgeClass, badgeText, extra){
     return `
@@ -1373,10 +1430,10 @@ Ana Martínez"></textarea>
         const salida = ofDay.find(r => r.tipo === 'Salida');
         const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
 
-        const entradaOk = entrada && (!d.horaEntrada || hora24(entrada.timestamp) <= d.horaEntrada);
-        const entradaTarde = entrada && d.horaEntrada && hora24(entrada.timestamp) > d.horaEntrada;
-        const salidaOk = salida && (!d.horaSalida || hora24(salida.timestamp) >= d.horaSalida);
-        const salidaEsAntes = salida && d.horaSalida && hora24(salida.timestamp) < d.horaSalida;
+        const entradaOk = entrada && !esTarde(entrada.timestamp, d.horaEntrada);
+        const entradaTarde = entrada && esTarde(entrada.timestamp, d.horaEntrada);
+        const salidaOk = salida && !esAntes(salida.timestamp, d.horaSalida);
+        const salidaEsAntes = salida && esAntes(salida.timestamp, d.horaSalida);
 
         if(!entrada && !ausenciaJustif) diasAusenteSinJustif.push(fecha);
         else if(!entrada && ausenciaJustif) diasAusenteJustif.push(ausenciaJustif);
@@ -1476,12 +1533,12 @@ Ana Martínez"></textarea>
         const partes = [];
         if(entrada){
           const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-          const tarde = d.horaEntrada && hora24(entrada.timestamp) > d.horaEntrada;
+          const tarde = esTarde(entrada.timestamp, d.horaEntrada);
           partes.push(`Entrada ${hora}${tarde ? ' <span class="estado-tag warn">Retraso</span>' : ' <span class="estado-tag ok">A tiempo</span>'}`);
         }
         if(salida){
           const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-          const antes = d.horaSalida && hora24(salida.timestamp) < d.horaSalida;
+          const antes = esAntes(salida.timestamp, d.horaSalida);
           partes.push(`Salida ${hora}${antes ? ' <span class="estado-tag warn">Antes</span>' : ' <span class="estado-tag ok">A tiempo</span>'}`);
         }
         linea = partes.join(' · ');
@@ -1538,8 +1595,8 @@ Ana Martínez"></textarea>
     const persona = docentes.find(x => x.nombre === r.docente);
     if(persona){
       if(r.tipo === 'Entrada' && persona.horaEntrada){
-        estadoTxt = hora24(r.timestamp) > persona.horaEntrada ? '(retraso)' : '(a tiempo)';
-      }else if(r.tipo === 'Salida' && persona.horaSalida && hora24(r.timestamp) < persona.horaSalida){
+        estadoTxt = esTarde(r.timestamp, persona.horaEntrada) ? '(retraso)' : '(a tiempo)';
+      }else if(r.tipo === 'Salida' && persona.horaSalida && esAntes(r.timestamp, persona.horaSalida)){
         estadoTxt = '(salida antes)';
       }
     }
