@@ -1532,6 +1532,18 @@ Ana Martínez"></textarea>
     }
     const d = new Date(r.timestamp);
     const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+
+    // etiqueta (a tiempo) / (retraso) / (salida antes), comparando contra el horario del colaborador
+    let estadoTxt = '';
+    const persona = docentes.find(x => x.nombre === r.docente);
+    if(persona){
+      if(r.tipo === 'Entrada' && persona.horaEntrada){
+        estadoTxt = hora24(r.timestamp) > persona.horaEntrada ? '(retraso)' : '(a tiempo)';
+      }else if(r.tipo === 'Salida' && persona.horaSalida && hora24(r.timestamp) < persona.horaSalida){
+        estadoTxt = '(salida antes)';
+      }
+    }
+
     const media = r.photo
       ? `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`
       : `<div class="record-photo justificacion-thumb" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}">Justificado<br>(ver)</div>`;
@@ -1543,7 +1555,7 @@ Ana Martínez"></textarea>
         <input type="checkbox" class="select-check" data-id="${r.id}">
         <div class="col-label">${r.tipo}</div>
         ${media}
-        <div class="meta">${timeStr}</div>
+        <div class="meta">${timeStr}${estadoTxt ? ' <span class="estado-tag ' + (estadoTxt === '(a tiempo)' ? 'ok' : 'warn') + '" style="margin-left:2px;">' + estadoTxt + '</span>' : ''}</div>
         ${notaJustif}
         ${r.photo ? `
         <label class="school-toggle">
