@@ -727,9 +727,9 @@ Ana Martínez"></textarea>
       const d = new Date(r.timestamp);
       const dateStr = d.toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
       const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-      const thumb = r.justificacion
-        ? `<div style="width:52px;height:52px;border-radius:8px;background:#EEF2F5;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;flex-shrink:0;">Justificado</div>`
-        : `<img src="${r.photo}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;">`;
+      const thumb = r.photo
+        ? `<img src="${r.photo}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;">`
+        : `<div style="width:52px;height:52px;border-radius:8px;background:#EEF2F5;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;flex-shrink:0;">Justificado</div>`;
       const tipoClass = (r.tipo === 'Entrada' || r.tipo === 'Salida') ? r.tipo.toLowerCase() : 'justif';
       const tipoLabel = { Entrada:'Entrada', Salida:'Salida', Ausencia:'Ausencia', Retraso:'Retraso', SalidaAntes:'Salida antes' }[r.tipo] || r.tipo;
       return `
@@ -1532,20 +1532,24 @@ Ana Martínez"></textarea>
     }
     const d = new Date(r.timestamp);
     const timeStr = d.toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-    const media = r.justificacion
-      ? `<div class="record-photo justificacion-thumb" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}">Justificado<br>(ver)</div>`
-      : `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`;
+    const media = r.photo
+      ? `<img src="${r.photo}" data-full="${r.photo}" class="record-photo">`
+      : `<div class="record-photo justificacion-thumb" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}">Justificado<br>(ver)</div>`;
+    const notaJustif = (r.photo && r.justificacion)
+      ? `<div class="muted motivo-nota" data-justificacion="${escapeHtml(r.justificacion)}" data-name="${escapeHtml(r.docente)}" style="font-size:10.5px;cursor:pointer;text-decoration:underline;">📝 Ver motivo</div>`
+      : '';
     return `
       <div class="record-col" data-id="${r.id}">
         <input type="checkbox" class="select-check" data-id="${r.id}">
         <div class="col-label">${r.tipo}</div>
         ${media}
         <div class="meta">${timeStr}</div>
-        ${r.justificacion ? '' : `
+        ${notaJustif}
+        ${r.photo ? `
         <label class="school-toggle">
           <input type="checkbox" class="school-check" ${r.enColegio ? 'checked' : ''}>
           En el colegio
-        </label>`}
+        </label>` : ''}
         <button class="del-btn" title="Eliminar registro">×</button>
       </div>`;
   }
@@ -1620,6 +1624,11 @@ Ana Martínez"></textarea>
     $$('.justificacion-thumb', list).forEach(box=>{
       box.addEventListener('click', ()=>{
         alert(box.dataset.name + ':\n\n' + box.dataset.justificacion);
+      });
+    });
+    $$('.motivo-nota', list).forEach(box=>{
+      box.addEventListener('click', ()=>{
+        alert(box.dataset.name + ' — motivo de la tardanza:\n\n' + box.dataset.justificacion);
       });
     });
     $$('.school-check', list).forEach(chk=>{
