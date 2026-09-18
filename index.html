@@ -404,8 +404,10 @@
             <div class="mode-btn" id="periodoSemana">Semana</div>
             <div class="mode-btn" id="periodoMes">Mes</div>
           </div>
-          <label class="field-label" style="margin-top:12px;">Fecha de referencia</label>
-          <input type="date" id="resumenFechaRef">
+          <label class="field-label" style="margin-top:12px;" id="resumenFechaLabel">Fecha</label>
+          <input type="date" id="resumenFechaDia">
+          <input type="week" id="resumenFechaSemana" style="display:none;">
+          <input type="month" id="resumenFechaMes" style="display:none;">
         </div>
 
         <div class="section" id="resumenList"></div>
@@ -1437,7 +1439,44 @@ Ana Martínez"></textarea>
   $('#resumenColaborador').addEventListener('change', ()=>{
     renderResumen();
   });
-  $('#resumenFechaRef').addEventListener('change', renderResumen);
+  $('#resumenFechaDia').addEventListener('change', renderResumen);
+  $('#resumenFechaSemana').addEventListener('change', renderResumen);
+  $('#resumenFechaMes').addEventListener('change', renderResumen);
+
+  function currentWeekValue(){
+    const d = new Date();
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay() + 6) % 7; // lunes=0
+    target.setDate(target.getDate() - dayNr + 3); // jueves de esa semana
+    const firstThursday = new Date(target.getFullYear(), 0, 4);
+    const diff = target - firstThursday;
+    const week = 1 + Math.round(diff / (7 * 24 * 60 * 60 * 1000));
+    return `${target.getFullYear()}-W${String(week).padStart(2,'0')}`;
+  }
+  function currentMonthValue(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+  // convierte el valor de <input type="week"> ("2026-W38") al lunes-domingo real
+  function semanaARango(weekStr){
+    const [yearStr, weekPart] = weekStr.split('-W');
+    const year = Number(yearStr);
+    const week = Number(weekPart);
+    const jan4 = new Date(year, 0, 4);
+    const jan4Day = jan4.getDay() || 7; // lunes=1..domingo=7
+    const monday = new Date(jan4);
+    monday.setDate(jan4.getDate() - jan4Day + 1 + (week - 1) * 7);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { start: isoDate(monday), end: isoDate(sunday) };
+  }
+  // convierte el valor de <input type="month"> ("2026-09") al primer y último día del mes
+  function mesARango(monthStr){
+    const [year, month] = monthStr.split('-').map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    return { start: isoDate(start), end: isoDate(end) };
+  }
 
   let resumenPeriodo = 'dia';
   $('#periodoDia').addEventListener('click', ()=> setResumenPeriodo('dia'));
@@ -1448,18 +1487,28 @@ Ana Martínez"></textarea>
     $('#periodoDia').classList.toggle('active', p === 'dia');
     $('#periodoSemana').classList.toggle('active', p === 'semana');
     $('#periodoMes').classList.toggle('active', p === 'mes');
+    $('#resumenFechaDia').style.display = p === 'dia' ? 'block' : 'none';
+    $('#resumenFechaSemana').style.display = p === 'semana' ? 'block' : 'none';
+    $('#resumenFechaMes').style.display = p === 'mes' ? 'block' : 'none';
+    $('#resumenFechaLabel').textContent = p === 'dia' ? 'Fecha' : (p === 'semana' ? 'Semana' : 'Mes');
     renderResumen();
   }
 
   async function renderResumen(){
     await populateResumenColaborador();
-    if(!$('#resumenFechaRef').value) $('#resumenFechaRef').value = todayLocalISO();
 
-    const fechaRef = $('#resumenFechaRef').value;
     let range;
-    if(resumenPeriodo === 'semana') range = getWeekRange(fechaRef);
-    else if(resumenPeriodo === 'mes') range = getMonthRange(fechaRef);
-    else range = { start: fechaRef, end: fechaRef };
+    if(resumenPeriodo === 'semana'){
+      if(!$('#resumenFechaSemana').value) $('#resumenFechaSemana').value = currentWeekValue();
+      range = semanaARango($('#resumenFechaSemana').value);
+    }else if(resumenPeriodo === 'mes'){
+      if(!$('#resumenFechaMes').value) $('#resumenFechaMes').value = currentMonthValue();
+      range = mesARango($('#resumenFechaMes').value);
+    }else{
+      if(!$('#resumenFechaDia').value) $('#resumenFechaDia').value = todayLocalISO();
+      const fecha = $('#resumenFechaDia').value;
+      range = { start: fecha, end: fecha };
+    }
 
     const numeroSeleccionado = $('#resumenColaborador').value;
     if(numeroSeleccionado){
