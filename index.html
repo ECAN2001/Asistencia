@@ -157,6 +157,10 @@
   .docente-card .horario-row label{font-size:11px;color:var(--muted);display:block;margin-bottom:3px;}
   .docente-card .horario-row input[type=time]{font-size:13px;padding:7px 8px;}
   .docente-card-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}
+  .dias-laborales-row{display:flex;gap:5px;}
+  .dia-btn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);background:var(--white);
+    color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;}
+  .dia-btn.activo{background:var(--navy);border-color:var(--navy);color:var(--white);}
 
   .save-all-bar{display:flex;align-items:center;gap:12px;margin-top:16px;position:sticky;bottom:0;background:var(--white);
     padding:10px 0;border-top:1px solid var(--line);}
@@ -1095,6 +1099,16 @@ Ana Martínez"></textarea>
     }
   });
 
+  $('#docentesList').addEventListener('click', (e)=>{
+    const btn = e.target.closest('.dia-btn');
+    if(!btn) return;
+    btn.classList.toggle('activo');
+    docentesDirty = true;
+    const msg = $('#guardarCambiosMsg');
+    msg.textContent = 'Tienes cambios sin guardar.';
+    msg.style.color = 'var(--gold)';
+  });
+
   $$('.admin-nav button').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const estabaEnDocentes = $('#panel-docentes').style.display !== 'none';
@@ -1124,7 +1138,7 @@ Ana Martínez"></textarea>
     return list.length ? Math.max(...list.map(d => d.numero)) + 1 : 1;
   }
   function blankDocenteFields(){
-    return { horaEntrada: '', horaSalida: '', resetToken: 0, horarioAceptado: false, horarioRechazado: false };
+    return { horaEntrada: '', horaSalida: '', resetToken: 0, horarioAceptado: false, horarioRechazado: false, diasLaborales: [] };
   }
 
   $('#addDocenteBtn').addEventListener('click', async ()=>{
@@ -1185,6 +1199,19 @@ Ana Martínez"></textarea>
     return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
   }
 
+  // botones L M X J V S D — valores según Date.getDay() (0=domingo..6=sábado)
+  const DIAS_SEMANA = [
+    { valor: 1, letra: 'L' }, { valor: 2, letra: 'M' }, { valor: 3, letra: 'X' },
+    { valor: 4, letra: 'J' }, { valor: 5, letra: 'V' }, { valor: 6, letra: 'S' }, { valor: 0, letra: 'D' }
+  ];
+  function diasSemanaBotones(diasLaborales){
+    // sin definir = todos los días activos por defecto (compatibilidad con colaboradores ya existentes)
+    const activos = (diasLaborales && diasLaborales.length) ? diasLaborales : [0,1,2,3,4,5,6];
+    return DIAS_SEMANA.map(d =>
+      `<button type="button" class="dia-btn ${activos.includes(d.valor) ? 'activo' : ''}" data-dia="${d.valor}">${d.letra}</button>`
+    ).join('');
+  }
+
   $('#guardarCambiosBtn').addEventListener('click', async ()=>{
     const btn = $('#guardarCambiosBtn');
     const msg = $('#guardarCambiosMsg');
@@ -1198,6 +1225,7 @@ Ana Martínez"></textarea>
     cards.forEach(card=>{
       const numero = Number(card.dataset.numero);
       const base = docentes.find(d => d.numero === numero) || {};
+      const diasLaborales = $$('.dia-btn', card).filter(b => b.classList.contains('activo')).map(b => Number(b.dataset.dia));
       porNumero.set(numero, {
         numero,
         nombre: $('.nombre-input', card).value.trim() || base.nombre,
@@ -1205,7 +1233,8 @@ Ana Martínez"></textarea>
         horaSalida: $('.hora-salida-input', card).value,
         resetToken: base.resetToken || 0,
         horarioAceptado: base.horarioAceptado || false,
-        horarioRechazado: base.horarioRechazado || false
+        horarioRechazado: base.horarioRechazado || false,
+        diasLaborales: diasLaborales
       });
     });
     const updated = [...porNumero.values()];
@@ -1258,6 +1287,12 @@ Ana Martínez"></textarea>
               <label>Hora de salida</label>
               <input type="time" class="hora-salida-input" value="${d.horaSalida || ''}">
               <div class="muted hora-preview" style="font-size:11px;margin-top:3px;">${formatoAmPm(d.horaSalida)}</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Días que trabaja</label>
+            <div class="dias-laborales-row">
+              ${diasSemanaBotones(d.diasLaborales)}
             </div>
           </div>
           <div class="docente-card-footer">
@@ -1518,6 +1553,13 @@ Ana Martínez"></textarea>
     }
   }
 
+  // true si ese día de la semana (0=domingo..6=sábado) es uno de los que trabaja esta persona
+  function esDiaLaboral(d, fecha){
+    if(!d.diasLaborales || !d.diasLaborales.length) return true; // sin restricción definida = cuentan todos los días
+    const dow = new Date(fecha + 'T00:00:00').getDay();
+    return d.diasLaborales.includes(dow);
+  }
+
   async function renderResumenTodos(range){
     const box = $('#resumenList');
     box.innerHTML = '<div class="empty">Cargando...</div>';
@@ -1546,8 +1588,10 @@ Ana Martínez"></textarea>
         const salida = ofDay.find(r => r.tipo === 'Salida');
         const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
 
-        if(!entrada && !ausenciaJustif){ cAusente++; if(!ausenteSinJustifFecha) ausenteSinJustifFecha = fecha; }
-        else if(!entrada && ausenciaJustif) cAusente++;
+        if(!entrada && !ausenciaJustif){
+          if(esDiaLaboral(d, fecha)){ cAusente++; if(!ausenteSinJustifFecha) ausenteSinJustifFecha = fecha; }
+          // si no le toca trabajar ese día, no cuenta como ausente
+        }else if(!entrada && ausenciaJustif){ cAusente++; }
 
         if(entrada && esTarde(entrada.timestamp, d.horaEntrada)) cRetraso++;
         if(salida && esAntes(salida.timestamp, d.horaSalida)) cSalidaAntes++;
@@ -1568,6 +1612,8 @@ Ana Martínez"></textarea>
           entradaCell = `${hora} <span class="estado-tag ${tarde ? 'warn' : 'ok'}">${tarde ? 'Retraso' : 'A tiempo'}</span>`;
         }else if(ausenciaJustif){
           entradaCell = `<span class="estado-tag pending">Ausente</span><br><span class="muted" style="font-size:10.5px;">${escapeHtml(ausenciaJustif.justificacion)}</span>`;
+        }else if(!esDiaLaboral(d, fecha)){
+          entradaCell = `<span class="muted">No laborable</span>`;
         }else{
           entradaCell = `<span class="estado-tag warn">Ausente</span><br>${justificarBtnHtml(d.nombre, d.numero, fecha)}`;
         }
@@ -1645,6 +1691,8 @@ Ana Martínez"></textarea>
         linea = partes.join(' · ');
       }else if(ausenciaJustif){
         linea = `<span class="estado-tag pending">Ausente (justificado)</span>: ${escapeHtml(ausenciaJustif.justificacion)}`;
+      }else if(!esDiaLaboral(d, fecha)){
+        linea = `<span class="muted">No laborable</span>`;
       }else{
         linea = `<span class="estado-tag warn">Ausente (sin registro)</span> ${justificarBtnHtml(d.nombre, d.numero, fecha)}`;
       }
