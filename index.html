@@ -79,6 +79,10 @@
   .estado-tag.pending{background:#F3ECD9;color:#8A6D1D;}
   .resumen-section{margin-bottom:18px;}
   .resumen-section-title{font-weight:700;font-size:14px;color:var(--navy);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:4px;}
+  .resumen-tabla{width:100%;border-collapse:collapse;font-size:12.5px;min-width:420px;}
+  .resumen-tabla th{background:var(--navy);color:var(--white);text-align:left;padding:8px 10px;font-size:11.5px;position:sticky;top:0;}
+  .resumen-tabla td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .resumen-tabla tr:nth-child(even) td{background:#FAF8F3;}
 
   .btn{display:block;width:100%;padding:14px;border-radius:9px;border:none;font-size:15.5px;font-weight:700;
     cursor:pointer;text-align:center;}
@@ -276,6 +280,7 @@
       <p class="muted">El retraso o la salida antes de tiempo se detectan solos comparando tu hora real contra tu horario — no necesitas declararlos aquí. Esto es solo para cuando no vas a asistir.</p>
       <label class="field-label" style="margin-top:6px;">Motivo (obligatorio)</label>
       <textarea id="justifSubtipoText" rows="3" placeholder="Explica brevemente el motivo de tu ausencia"></textarea>
+      <div class="error-box" id="justifSubtipoMsg" style="display:none;"></div>
       <button class="btn btn-primary" id="saveJustifSubtipoBtn" style="margin-top:10px;">Guardar</button>
       <button class="btn btn-ghost" id="cancelJustifSubtipoBtn" style="margin-top:8px;">Cancelar</button>
     </div>
@@ -318,6 +323,7 @@
       <div id="justifyWrap" style="display:none;">
         <label class="field-label">Escribe el motivo (obligatorio)</label>
         <textarea id="justifyText" rows="3" placeholder="Ej: Estoy haciendo una gestión fuera del colegio autorizada por dirección."></textarea>
+        <div class="error-box" id="justifyMsg" style="display:none;"></div>
         <button class="btn btn-primary" id="saveJustifyBtn" style="margin-top:10px;">Guardar registro</button>
       </div>
 
@@ -400,14 +406,6 @@
           </div>
           <label class="field-label" style="margin-top:12px;">Fecha de referencia</label>
           <input type="date" id="resumenFechaRef">
-        </div>
-
-        <div class="section" id="resumenTodosControls" style="padding-top:10px;">
-          <label class="field-label">Mostrar categorías</label>
-          <label class="justify-check"><input type="checkbox" class="resumenCat" value="aTiempo" checked> A tiempo (cumplen entrada y salida)</label>
-          <label class="justify-check"><input type="checkbox" class="resumenCat" value="retraso" checked> Entradas tarde</label>
-          <label class="justify-check"><input type="checkbox" class="resumenCat" value="salidaAntes" checked> Salidas antes</label>
-          <label class="justify-check"><input type="checkbox" class="resumenCat" value="ausente" checked> Ausentes</label>
         </div>
 
         <div class="section" id="resumenList"></div>
@@ -570,6 +568,26 @@ Ana Martínez"></textarea>
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- validación de calidad de los motivos escritos (sin explicar la regla al usuario) ----------
+  function contarSilabas(palabra){
+    const grupos = palabra.toLowerCase().match(/[aeiouáéíóúü]+/g);
+    return grupos ? grupos.length : 0;
+  }
+  function esPalabraReal(palabra, minSilabas){
+    return /^[a-záéíóúñü]+$/i.test(palabra) && palabra.length >= 2 && contarSilabas(palabra) >= minSilabas;
+  }
+  function palabrasDe(texto){
+    return (texto || '').trim().split(/\s+/).filter(w => w.length > 0);
+  }
+  // para "no puedo tomar foto": al menos 2 palabras reales
+  function justificacionCamaraValida(texto){
+    return palabrasDe(texto).filter(w => esPalabraReal(w, 1)).length >= 2;
+  }
+  // para retraso / salida antes / ausencia: al menos 1 palabra real de mínimo 3 sílabas
+  function justificacionRetrasoValida(texto){
+    return palabrasDe(texto).some(w => esPalabraReal(w, 3));
   }
 
   // ---------- tabs ----------
@@ -819,16 +837,23 @@ Ana Martínez"></textarea>
     $('#doc-step-tipo').style.display = 'block';
     $('#justifSubtipoText').value = '';
     $('#justifSubtipoText').style.borderColor = '';
+    $('#justifSubtipoMsg').style.display = 'none';
   });
   $('#saveJustifSubtipoBtn').addEventListener('click', ()=>{
+    const btn = $('#saveJustifSubtipoBtn');
+    if(btn.disabled) return;
     const text = $('#justifSubtipoText').value.trim();
-    if(!text){
+    if(!justificacionRetrasoValida(text)){
       $('#justifSubtipoText').style.borderColor = 'var(--warn)';
       $('#justifSubtipoText').focus();
+      $('#justifSubtipoMsg').textContent = 'Justifica bien el motivo de tu ausencia.';
+      $('#justifSubtipoMsg').style.display = 'block';
       return;
     }
+    $('#justifSubtipoMsg').style.display = 'none';
+    btn.disabled = true;
     selectedTipo = 'Ausencia';
-    submitRecord(null, text, $('#saveJustifSubtipoBtn'), 'Guardar');
+    submitRecord(null, text, btn, 'Guardar');
   });
 
   $('#openCameraBtn').addEventListener('click', openCamera);
@@ -936,35 +961,54 @@ Ana Martínez"></textarea>
   }
 
   $('#saveRecordBtn').addEventListener('click', async ()=>{
+    const btn = $('#saveRecordBtn');
+    if(btn.disabled) return;
+    btn.disabled = true;
     if(!(await revalidarTardanzaAntesDeGuardar())){
+      btn.disabled = false;
       $('#tardanzaText').focus();
       return;
     }
-    if(tardanzaRequerida && !$('#tardanzaText').value.trim()){
+    if(tardanzaRequerida && !justificacionRetrasoValida($('#tardanzaText').value)){
+      btn.disabled = false;
       $('#tardanzaText').style.borderColor = 'var(--warn)';
       $('#tardanzaText').focus();
+      $('#tardanzaMsg').textContent = selectedTipo === 'Entrada'
+        ? 'Justifica bien el motivo de tu retraso.'
+        : 'Justifica bien el motivo de tu salida antes de tiempo.';
       return;
     }
-    submitRecord(capturedDataUrl, combinarJustificacion(''), $('#saveRecordBtn'), 'Guardar registro');
+    submitRecord(capturedDataUrl, combinarJustificacion(''), btn, 'Guardar registro');
   });
 
   $('#saveJustifyBtn').addEventListener('click', async ()=>{
+    const btn = $('#saveJustifyBtn');
+    if(btn.disabled) return;
     const text = $('#justifyText').value.trim();
-    if(!text){
+    if(!justificacionCamaraValida(text)){
       $('#justifyText').style.borderColor = 'var(--warn)';
       $('#justifyText').focus();
+      $('#justifyMsg').textContent = 'Justifica bien el motivo por el que no puedes usar la cámara.';
+      $('#justifyMsg').style.display = 'block';
       return;
     }
+    $('#justifyMsg').style.display = 'none';
+    btn.disabled = true;
     if(!(await revalidarTardanzaAntesDeGuardar())){
+      btn.disabled = false;
       $('#tardanzaText').focus();
       return;
     }
-    if(tardanzaRequerida && !$('#tardanzaText').value.trim()){
+    if(tardanzaRequerida && !justificacionRetrasoValida($('#tardanzaText').value)){
+      btn.disabled = false;
       $('#tardanzaText').style.borderColor = 'var(--warn)';
       $('#tardanzaText').focus();
+      $('#tardanzaMsg').textContent = selectedTipo === 'Entrada'
+        ? 'Justifica bien el motivo de tu retraso.'
+        : 'Justifica bien el motivo de tu salida antes de tiempo.';
       return;
     }
-    submitRecord(null, combinarJustificacion(text), $('#saveJustifyBtn'), 'Guardar registro');
+    submitRecord(null, combinarJustificacion(text), btn, 'Guardar registro');
   });
 
   $('#newRecordBtn').addEventListener('click', resetDocenteFlow);
@@ -979,8 +1023,10 @@ Ana Martínez"></textarea>
     $('#justifyWrap').style.display = 'none';
     $('#justifyText').value = '';
     $('#justifyText').style.borderColor = '';
+    $('#justifyMsg').style.display = 'none';
     $('#justifSubtipoText').value = '';
     $('#justifSubtipoText').style.borderColor = '';
+    $('#justifSubtipoMsg').style.display = 'none';
     $('#tardanzaWrap').style.display = 'none';
     $('#tardanzaText').value = '';
     $('#tardanzaText').style.borderColor = '';
@@ -1040,6 +1086,10 @@ Ana Martínez"></textarea>
       const msg = $('#guardarCambiosMsg');
       msg.textContent = 'Tienes cambios sin guardar.';
       msg.style.color = 'var(--gold)';
+    }
+    if(e.target.matches('.hora-entrada-input, .hora-salida-input')){
+      const preview = e.target.parentElement.querySelector('.hora-preview');
+      if(preview) preview.textContent = formatoAmPm(e.target.value);
     }
   });
 
@@ -1121,6 +1171,18 @@ Ana Martínez"></textarea>
     return '<span class="estado-tag pending">Pendiente de aceptar</span>';
   }
 
+  // muestra "3:30 p. m." a partir de "15:30", para detectar a simple vista si quedó mal puesta la hora
+  function formatoAmPm(hhmm){
+    const mins = aMinutos(hhmm);
+    if(mins === null) return 'Sin definir';
+    const h24 = Math.floor(mins / 60);
+    const m = mins % 60;
+    const ampm = h24 < 12 ? 'a. m.' : 'p. m.';
+    let h12 = h24 % 12;
+    if(h12 === 0) h12 = 12;
+    return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+  }
+
   $('#guardarCambiosBtn').addEventListener('click', async ()=>{
     const btn = $('#guardarCambiosBtn');
     const msg = $('#guardarCambiosMsg');
@@ -1188,10 +1250,12 @@ Ana Martínez"></textarea>
             <div>
               <label>Hora de entrada</label>
               <input type="time" class="hora-entrada-input" value="${d.horaEntrada || ''}">
+              <div class="muted hora-preview" style="font-size:11px;margin-top:3px;">${formatoAmPm(d.horaEntrada)}</div>
             </div>
             <div>
               <label>Hora de salida</label>
               <input type="time" class="hora-salida-input" value="${d.horaSalida || ''}">
+              <div class="muted hora-preview" style="font-size:11px;margin-top:3px;">${formatoAmPm(d.horaSalida)}</div>
             </div>
           </div>
           <div class="docente-card-footer">
@@ -1280,11 +1344,22 @@ Ana Martínez"></textarea>
   // convierte "H:MM" o "HH:MM" (con o sin cero adelante) a minutos totales, para comparar de forma numérica y no como texto
   function aMinutos(hhmm){
     if(!hhmm) return null;
-    const partes = String(hhmm).split(':');
+    let str = String(hhmm).trim().toUpperCase();
+    let esPM = false, esAM = false;
+    if(str.endsWith('PM') || str.endsWith('P.M.') || str.endsWith('P. M.')){
+      esPM = true;
+      str = str.replace(/P\.?\s*M\.?/, '').trim();
+    }else if(str.endsWith('AM') || str.endsWith('A.M.') || str.endsWith('A. M.')){
+      esAM = true;
+      str = str.replace(/A\.?\s*M\.?/, '').trim();
+    }
+    const partes = str.split(':');
     if(partes.length < 2) return null;
-    const h = parseInt(partes[0], 10);
+    let h = parseInt(partes[0], 10);
     const m = parseInt(partes[1], 10);
     if(isNaN(h) || isNaN(m)) return null;
+    if(esPM && h < 12) h += 12;
+    if(esAM && h === 12) h = 0;
     return h * 60 + m;
   }
   // true si el timestamp real quedó DESPUÉS de la hora programada (retraso de entrada)
@@ -1360,11 +1435,8 @@ Ana Martínez"></textarea>
   }
 
   $('#resumenColaborador').addEventListener('change', ()=>{
-    const isPersona = !!$('#resumenColaborador').value;
-    $('#resumenTodosControls').style.display = isPersona ? 'none' : 'block';
     renderResumen();
   });
-  $$('.resumenCat').forEach(chk => chk.addEventListener('change', renderResumen));
   $('#resumenFechaRef').addEventListener('change', renderResumen);
 
   let resumenPeriodo = 'dia';
@@ -1411,18 +1483,13 @@ Ana Martínez"></textarea>
       return;
     }
 
-    const activas = {};
-    $$('.resumenCat').forEach(chk => activas[chk.value] = chk.checked);
     const dias = dateRangeList(range.start, range.end);
     const soloUnDia = dias.length === 1;
 
-    const aTiempo = [], retrasos = [], salidasAntes = [], ausentes = [];
-
-    list.forEach(d=>{
+    const filas = list.map(d=>{
       const propios = allRecords.filter(r => r.docente === d.nombre);
-      let cTiempo = 0, cRetraso = 0, cSalidaAntes = 0;
-      const retrasoDetalle = [], salidaAntesDetalle = [];
-      const diasAusenteSinJustif = [], diasAusenteJustif = [];
+      let cTiempo = 0, cRetraso = 0, cSalidaAntes = 0, cAusente = 0;
+      let ausenteSinJustifFecha = null; // para el botón Justificar en vista de un día
 
       dias.forEach(fecha=>{
         const ofDay = propios.filter(r => r.timestamp.slice(0,10) === fecha);
@@ -1430,78 +1497,63 @@ Ana Martínez"></textarea>
         const salida = ofDay.find(r => r.tipo === 'Salida');
         const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
 
-        const entradaOk = entrada && !esTarde(entrada.timestamp, d.horaEntrada);
-        const entradaTarde = entrada && esTarde(entrada.timestamp, d.horaEntrada);
-        const salidaOk = salida && !esAntes(salida.timestamp, d.horaSalida);
-        const salidaEsAntes = salida && esAntes(salida.timestamp, d.horaSalida);
+        if(!entrada && !ausenciaJustif){ cAusente++; if(!ausenteSinJustifFecha) ausenteSinJustifFecha = fecha; }
+        else if(!entrada && ausenciaJustif) cAusente++;
 
-        if(!entrada && !ausenciaJustif) diasAusenteSinJustif.push(fecha);
-        else if(!entrada && ausenciaJustif) diasAusenteJustif.push(ausenciaJustif);
-
-        if(entradaTarde){
-          cRetraso++;
-          const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-          retrasoDetalle.push(`${formatFechaCorta(fecha)} ${hora}${entrada.justificacion ? ' — ' + escapeHtml(entrada.justificacion) : ' — sin justificar'}`);
-        }
-        if(salidaEsAntes){
-          cSalidaAntes++;
-          const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
-          salidaAntesDetalle.push(`${formatFechaCorta(fecha)} ${hora}${salida.justificacion ? ' — ' + escapeHtml(salida.justificacion) : ' — sin justificar'}`);
-        }
-        if(entradaOk && salidaOk) cTiempo++;
+        if(entrada && esTarde(entrada.timestamp, d.horaEntrada)) cRetraso++;
+        if(salida && esAntes(salida.timestamp, d.horaSalida)) cSalidaAntes++;
+        if(entrada && !esTarde(entrada.timestamp, d.horaEntrada) && salida && !esAntes(salida.timestamp, d.horaSalida)) cTiempo++;
       });
 
       if(soloUnDia){
-        // vista de un solo día: igual que antes, una línea por persona
         const fecha = dias[0];
         const ofDay = propios.filter(r => r.timestamp.slice(0,10) === fecha);
         const entrada = ofDay.find(r => r.tipo === 'Entrada');
         const salida = ofDay.find(r => r.tipo === 'Salida');
-        if(diasAusenteSinJustif.length){
-          ausentes.push(resumenPersonLine(d, '', 'warn', 'Ausente (sin registro)', '') + justificarBtnHtml(d.nombre, d.numero, fecha));
-        }
-        diasAusenteJustif.forEach(r=>{
-          ausentes.push(resumenPersonLine(d, '', 'pending', 'Ausente (justificado)', escapeHtml(r.justificacion)));
-        });
-        if(cRetraso) retrasos.push(resumenPersonLine(d, retrasoDetalle[0].split(' — ')[0], 'warn', 'Retraso', retrasoDetalle[0].split(' — ')[1]));
-        if(cSalidaAntes) salidasAntes.push(resumenPersonLine(d, salidaAntesDetalle[0].split(' — ')[0], 'warn', 'Salida antes', salidaAntesDetalle[0].split(' — ')[1]));
-        if(cTiempo) aTiempo.push(resumenPersonLine(d, '', 'ok', 'A tiempo'));
-      }else{
-        // vista de semana/mes: resumen agregado por persona
-        if(cTiempo){
-          aTiempo.push(resumenPersonLine(d, '', 'ok', `${cTiempo} día(s) a tiempo`));
-        }
-        if(cRetraso){
-          retrasos.push(resumenPersonLine(d, '', 'warn', `${cRetraso} día(s) con retraso`, retrasoDetalle.join('<br>')));
-        }
-        if(cSalidaAntes){
-          salidasAntes.push(resumenPersonLine(d, '', 'warn', `${cSalidaAntes} día(s) con salida antes`, salidaAntesDetalle.join('<br>')));
-        }
-        if(diasAusenteSinJustif.length || diasAusenteJustif.length){
-          const totalAusente = diasAusenteSinJustif.length + diasAusenteJustif.length;
-          const sinJustifHtml = diasAusenteSinJustif.map(fecha => `
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
-              <span>${formatFechaCorta(fecha)} — sin justificar</span>
-              ${justificarBtnHtml(d.nombre, d.numero, fecha)}
-            </div>`).join('');
-          const justifHtml = diasAusenteJustif.map(r => `
-            <div style="margin-top:4px;">${formatFechaCorta(r.timestamp.slice(0,10))} — justificado: ${escapeHtml(r.justificacion)}</div>`).join('');
-          ausentes.push(`
-            <div class="record" style="padding:10px 0;display:block;">
-              <div class="name">${d.numero}. ${escapeHtml(d.nombre)}</div>
-              <div class="meta" style="margin-top:4px;">${totalAusente} día(s) ausente</div>
-              ${sinJustifHtml}${justifHtml}
-            </div>`);
-        }
-      }
-    });
+        const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
 
-    let html = '';
-    if(activas.aTiempo) html += resumenSection('A tiempo (cumplen entrada y salida)', { html: aTiempo.join(''), count: aTiempo.length }, 'Nadie en esta categoría.');
-    if(activas.retraso) html += resumenSection('Entradas tarde', { html: retrasos.join(''), count: retrasos.length }, 'Nadie llegó tarde.');
-    if(activas.salidaAntes) html += resumenSection('Salidas antes', { html: salidasAntes.join(''), count: salidasAntes.length }, 'Nadie salió antes.');
-    if(activas.ausente) html += resumenSection('Ausentes', { html: ausentes.join(''), count: ausentes.length }, 'Nadie ausente.');
-    box.innerHTML = html || '<div class="empty">Selecciona al menos una categoría.</div>';
+        let entradaCell;
+        if(entrada){
+          const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+          const tarde = esTarde(entrada.timestamp, d.horaEntrada);
+          entradaCell = `${hora} <span class="estado-tag ${tarde ? 'warn' : 'ok'}">${tarde ? 'Retraso' : 'A tiempo'}</span>`;
+        }else if(ausenciaJustif){
+          entradaCell = `<span class="estado-tag pending">Ausente</span><br><span class="muted" style="font-size:10.5px;">${escapeHtml(ausenciaJustif.justificacion)}</span>`;
+        }else{
+          entradaCell = `<span class="estado-tag warn">Ausente</span><br>${justificarBtnHtml(d.nombre, d.numero, fecha)}`;
+        }
+
+        let salidaCell = '—';
+        if(salida){
+          const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
+          const antes = esAntes(salida.timestamp, d.horaSalida);
+          salidaCell = antes ? `${hora} <span class="estado-tag warn">Antes</span>` : hora;
+        }
+
+        return `<tr><td>${d.numero}. ${escapeHtml(d.nombre)}</td><td>${entradaCell}</td><td>${salidaCell}</td></tr>`;
+      }else{
+        return `<tr>
+          <td>${d.numero}. ${escapeHtml(d.nombre)}</td>
+          <td>${cTiempo}</td>
+          <td>${cRetraso}</td>
+          <td>${cSalidaAntes}</td>
+          <td>${cAusente}${ausenteSinJustifFecha ? ' ' + justificarBtnHtml(d.nombre, d.numero, ausenteSinJustifFecha) : ''}</td>
+        </tr>`;
+      }
+    }).join('');
+
+    const headerRow = soloUnDia
+      ? `<tr><th>Colaborador</th><th>Entrada</th><th>Salida</th></tr>`
+      : `<tr><th>Colaborador</th><th>A tiempo</th><th>Retraso</th><th>Sal. antes</th><th>Ausente</th></tr>`;
+
+    box.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table class="resumen-tabla">
+          <thead>${headerRow}</thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </div>
+      ${!soloUnDia ? '<p class="muted" style="margin-top:10px;font-size:12px;">Si hay varios días ausente sin justificar, el botón "Justificar" corresponde solo al primero — elige a la persona en el filtro de arriba para ver el detalle día por día.</p>' : ''}`;
     bindJustificarButtons(box);
   }
 
@@ -1626,8 +1678,12 @@ Ana Martínez"></textarea>
   async function renderRecords(){
     const list = $('#recordsList');
     list.innerHTML = '<div class="empty">Cargando...</div>';
-    const records = (await apiGet('getAsistencia')) || [];
-    if(!records.length){
+    const [records, docentesList] = await Promise.all([
+      apiGet('getAsistencia'),
+      apiGet('getDocentes')
+    ]);
+    if(docentesList) docentes = docentesList; // horario siempre actualizado, no el que tenía en memoria
+    if(!records || !records.length){
       list.innerHTML = '<div class="empty">Todavía no hay registros de asistencia.</div>';
       return;
     }
