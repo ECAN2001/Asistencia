@@ -83,6 +83,33 @@
   .resumen-tabla th{background:var(--navy);color:var(--white);text-align:left;padding:8px 10px;font-size:11.5px;position:sticky;top:0;}
   .resumen-tabla td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
   .resumen-tabla tr:nth-child(even) td{background:#FAF8F3;}
+  .resumen-mini-foto{width:36px;height:36px;border-radius:6px;object-fit:cover;cursor:pointer;display:block;margin-bottom:3px;}
+
+  .mini-cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .mini-cal-header button{background:none;border:1.5px solid var(--line);border-radius:6px;width:30px;height:30px;
+    font-size:16px;color:var(--navy);cursor:pointer;}
+  .mini-cal-header span{font-weight:700;font-size:13.5px;color:var(--navy);text-transform:capitalize;}
+  .mini-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cal-dow{text-align:center;font-size:10.5px;font-weight:700;color:var(--muted);padding-bottom:4px;}
+  .cal-day{text-align:center;padding:7px 0;font-size:12.5px;border-radius:6px;cursor:pointer;color:var(--ink);}
+  .cal-day.otro-mes{color:#C9C4B6;}
+  .cal-day.hoy{font-weight:700;color:var(--gold);}
+  .cal-day.en-semana{background:var(--navy);color:var(--white);}
+  .cal-day.en-semana.hoy{color:var(--gold-light);}
+
+  /* --- impresión / PDF del Resumen --- */
+  .print-header{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #resumenList, #resumenList *, #resumenPrintHeader, #resumenPrintHeader *{visibility:visible;}
+    #resumenPrintHeader{display:block;text-align:center;position:absolute;top:0;left:0;width:100%;}
+    #resumenPrintHeader .titulo{font-size:18px;font-weight:700;color:var(--navy);}
+    #resumenPrintHeader .subtitulo{font-size:13px;color:var(--muted);margin-top:2px;}
+    #resumenList{position:absolute;top:90px;left:0;width:100%;}
+    .justificar-ausencia-btn, .del-btn{display:none !important;}
+    .resumen-tabla{width:100%;font-size:11px;}
+    .resumen-tabla th{background:#16324F !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  }
 
   .btn{display:block;width:100%;padding:14px;border-radius:9px;border:none;font-size:15.5px;font-weight:700;
     cursor:pointer;text-align:center;}
@@ -410,10 +437,24 @@
           </div>
           <label class="field-label" style="margin-top:12px;" id="resumenFechaLabel">Fecha</label>
           <input type="date" id="resumenFechaDia">
-          <input type="week" id="resumenFechaSemana" style="display:none;">
+
+          <div id="resumenFechaSemana" style="display:none;">
+            <div class="mini-cal-header">
+              <button type="button" id="calSemanaPrev">‹</button>
+              <span id="calSemanaLabel"></span>
+              <button type="button" id="calSemanaNext">›</button>
+            </div>
+            <div class="mini-cal-grid" id="calSemanaGrid"></div>
+          </div>
+
           <input type="month" id="resumenFechaMes" style="display:none;">
         </div>
 
+        <div class="section" style="padding-bottom:0;">
+          <button class="btn btn-secondary" id="descargarPdfBtn" style="width:auto;padding:10px 16px;font-size:13px;">⬇️ Descargar PDF</button>
+        </div>
+
+        <div class="print-header" id="resumenPrintHeader"></div>
         <div class="section" id="resumenList"></div>
       </div>
 
@@ -1399,6 +1440,13 @@ Ana Martínez"></textarea>
     if(esAM && h === 12) h = 0;
     return h * 60 + m;
   }
+  // "61" -> "1h 1min" ; "45" -> "45min"
+  function formatearMinutos(mins){
+    if(mins < 60) return `${mins}min`;
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  }
   // true si el timestamp real quedó DESPUÉS de la hora programada (retraso de entrada)
   function esTarde(timestampIso, horaProgramada){
     const prog = aMinutos(horaProgramada);
@@ -1458,6 +1506,12 @@ Ana Martínez"></textarea>
         adminJustificarAusencia(b.dataset.docente, Number(b.dataset.numero), b.dataset.fecha);
       });
     });
+    $$('.resumen-mini-foto', container).forEach(img=>{
+      img.addEventListener('click', ()=>{
+        $('#lightboxImg').src = img.dataset.full;
+        $('#lightbox').classList.add('active');
+      });
+    });
   }
 
   // --- selector colaborador / periodo ---
@@ -1475,35 +1529,11 @@ Ana Martínez"></textarea>
     renderResumen();
   });
   $('#resumenFechaDia').addEventListener('change', renderResumen);
-  $('#resumenFechaSemana').addEventListener('change', renderResumen);
   $('#resumenFechaMes').addEventListener('change', renderResumen);
 
-  function currentWeekValue(){
-    const d = new Date();
-    const target = new Date(d.valueOf());
-    const dayNr = (d.getDay() + 6) % 7; // lunes=0
-    target.setDate(target.getDate() - dayNr + 3); // jueves de esa semana
-    const firstThursday = new Date(target.getFullYear(), 0, 4);
-    const diff = target - firstThursday;
-    const week = 1 + Math.round(diff / (7 * 24 * 60 * 60 * 1000));
-    return `${target.getFullYear()}-W${String(week).padStart(2,'0')}`;
-  }
   function currentMonthValue(){
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  }
-  // convierte el valor de <input type="week"> ("2026-W38") al lunes-domingo real
-  function semanaARango(weekStr){
-    const [yearStr, weekPart] = weekStr.split('-W');
-    const year = Number(yearStr);
-    const week = Number(weekPart);
-    const jan4 = new Date(year, 0, 4);
-    const jan4Day = jan4.getDay() || 7; // lunes=1..domingo=7
-    const monday = new Date(jan4);
-    monday.setDate(jan4.getDate() - jan4Day + 1 + (week - 1) * 7);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return { start: isoDate(monday), end: isoDate(sunday) };
   }
   // convierte el valor de <input type="month"> ("2026-09") al primer y último día del mes
   function mesARango(monthStr){
@@ -1512,6 +1542,49 @@ Ana Martínez"></textarea>
     const end = new Date(year, month, 0);
     return { start: isoDate(start), end: isoDate(end) };
   }
+
+  // --- mini-calendario para elegir semana (lunes a domingo), tocando cualquier día ---
+  let calSemanaMes = new Date();
+  let semanaSeleccionadaRango = null;
+
+  function renderCalendarioSemana(){
+    $('#calSemanaLabel').textContent = calSemanaMes.toLocaleDateString('es-SV', {month:'long', year:'numeric'});
+    const year = calSemanaMes.getFullYear();
+    const month = calSemanaMes.getMonth();
+    const primerDiaMes = new Date(year, month, 1);
+    const diaSemanaPrimer = (primerDiaMes.getDay() + 6) % 7; // lunes=0
+    const inicioGrid = new Date(primerDiaMes);
+    inicioGrid.setDate(primerDiaMes.getDate() - diaSemanaPrimer);
+
+    const hoy = todayLocalISO();
+    let html = ['L','M','X','J','V','S','D'].map(l => `<div class="cal-dow">${l}</div>`).join('');
+    const cursor = new Date(inicioGrid);
+    for(let i=0; i<42; i++){
+      const fechaIso = isoDate(cursor);
+      const esOtroMes = cursor.getMonth() !== month;
+      const esHoy = fechaIso === hoy;
+      const enSemana = semanaSeleccionadaRango && fechaIso >= semanaSeleccionadaRango.start && fechaIso <= semanaSeleccionadaRango.end;
+      html += `<div class="cal-day ${esOtroMes ? 'otro-mes' : ''} ${esHoy ? 'hoy' : ''} ${enSemana ? 'en-semana' : ''}" data-fecha="${fechaIso}">${cursor.getDate()}</div>`;
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    $('#calSemanaGrid').innerHTML = html;
+
+    $$('.cal-day', $('#calSemanaGrid')).forEach(el=>{
+      el.addEventListener('click', ()=>{
+        semanaSeleccionadaRango = getWeekRange(el.dataset.fecha);
+        renderCalendarioSemana();
+        renderResumen();
+      });
+    });
+  }
+  $('#calSemanaPrev').addEventListener('click', ()=>{
+    calSemanaMes.setMonth(calSemanaMes.getMonth() - 1);
+    renderCalendarioSemana();
+  });
+  $('#calSemanaNext').addEventListener('click', ()=>{
+    calSemanaMes.setMonth(calSemanaMes.getMonth() + 1);
+    renderCalendarioSemana();
+  });
 
   let resumenPeriodo = 'dia';
   $('#periodoDia').addEventListener('click', ()=> setResumenPeriodo('dia'));
@@ -1526,6 +1599,11 @@ Ana Martínez"></textarea>
     $('#resumenFechaSemana').style.display = p === 'semana' ? 'block' : 'none';
     $('#resumenFechaMes').style.display = p === 'mes' ? 'block' : 'none';
     $('#resumenFechaLabel').textContent = p === 'dia' ? 'Fecha' : (p === 'semana' ? 'Semana' : 'Mes');
+    if(p === 'semana'){
+      if(!semanaSeleccionadaRango) semanaSeleccionadaRango = getWeekRange(todayLocalISO());
+      calSemanaMes = new Date(semanaSeleccionadaRango.start + 'T00:00:00');
+      renderCalendarioSemana();
+    }
     renderResumen();
   }
 
@@ -1534,8 +1612,8 @@ Ana Martínez"></textarea>
 
     let range;
     if(resumenPeriodo === 'semana'){
-      if(!$('#resumenFechaSemana').value) $('#resumenFechaSemana').value = currentWeekValue();
-      range = semanaARango($('#resumenFechaSemana').value);
+      if(!semanaSeleccionadaRango) semanaSeleccionadaRango = getWeekRange(todayLocalISO());
+      range = semanaSeleccionadaRango;
     }else if(resumenPeriodo === 'mes'){
       if(!$('#resumenFechaMes').value) $('#resumenFechaMes').value = currentMonthValue();
       range = mesARango($('#resumenFechaMes').value);
@@ -1551,6 +1629,44 @@ Ana Martínez"></textarea>
     }else{
       await renderResumenTodos(range);
     }
+  }
+
+  // lee la tabla del Resumen tal como está en pantalla y la pasa a texto plano (sin fotos ni botones)
+  function extraerTablaResumen(){
+    const tabla = document.querySelector('#resumenList .resumen-tabla');
+    if(!tabla) return null;
+    const filas = [];
+    $$('tr', tabla).forEach(tr=>{
+      const celdas = $$('th, td', tr).map(celda=>{
+        const clon = celda.cloneNode(true);
+        $$('img, button', clon).forEach(el => el.remove());
+        return clon.textContent.replace(/\s+/g, ' ').trim();
+      });
+      filas.push(celdas);
+    });
+    return filas;
+  }
+
+  $('#descargarPdfBtn').addEventListener('click', ()=>{
+    const filas = extraerTablaResumen();
+    if(!filas || filas.length < 2){
+      alert('No hay datos para exportar todavía.');
+      return;
+    }
+    const periodoLabel = resumenPeriodo === 'dia' ? 'Día' : (resumenPeriodo === 'semana' ? 'Semana' : 'Mes');
+    const fechaLabel = resumenPeriodo === 'dia' ? $('#resumenFechaDia').value
+      : (resumenPeriodo === 'semana' ? `${semanaSeleccionadaRango.start} a ${semanaSeleccionadaRango.end}` : $('#resumenFechaMes').value);
+    $('#resumenPrintHeader').innerHTML = `
+      <div class="titulo">Comunidad ECAN — Escuela Cristiana Cristo a las Naciones</div>
+      <div class="subtitulo">Resumen de asistencia — ${periodoLabel}: ${fechaLabel}</div>`;
+    window.print();
+  });
+
+  function fotoMiniHtml(r){
+    if(r.photo){
+      return `<img src="${r.photo}" data-full="${r.photo}" class="resumen-mini-foto">`;
+    }
+    return '';
   }
 
   // true si ese día de la semana (0=domingo..6=sábado) es uno de los que trabaja esta persona
@@ -1580,21 +1696,36 @@ Ana Martínez"></textarea>
     const filas = list.map(d=>{
       const propios = allRecords.filter(r => r.docente === d.nombre);
       let cTiempo = 0, cRetraso = 0, cSalidaAntes = 0, cAusente = 0;
-      let ausenteSinJustifFecha = null; // para el botón Justificar en vista de un día
+      const retrasoDetalle = [], salidaAntesDetalle = [], ausenteDetalle = [];
 
       dias.forEach(fecha=>{
         const ofDay = propios.filter(r => r.timestamp.slice(0,10) === fecha);
         const entrada = ofDay.find(r => r.tipo === 'Entrada');
         const salida = ofDay.find(r => r.tipo === 'Salida');
         const ausenciaJustif = ofDay.find(r => r.tipo === 'Ausencia');
+        const fechaCorta = formatFechaCorta(fecha);
 
         if(!entrada && !ausenciaJustif){
-          if(esDiaLaboral(d, fecha)){ cAusente++; if(!ausenteSinJustifFecha) ausenteSinJustifFecha = fecha; }
+          if(esDiaLaboral(d, fecha)){
+            cAusente++;
+            ausenteDetalle.push(`<div style="margin-top:4px;">${fechaCorta} — sin justificar ${justificarBtnHtml(d.nombre, d.numero, fecha)}</div>`);
+          }
           // si no le toca trabajar ese día, no cuenta como ausente
-        }else if(!entrada && ausenciaJustif){ cAusente++; }
+        }else if(!entrada && ausenciaJustif){
+          cAusente++;
+          ausenteDetalle.push(`<div style="margin-top:4px;">${fechaCorta} — ${escapeHtml(ausenciaJustif.justificacion)}</div>`);
+        }
 
-        if(entrada && esTarde(entrada.timestamp, d.horaEntrada)) cRetraso++;
-        if(salida && esAntes(salida.timestamp, d.horaSalida)) cSalidaAntes++;
+        if(entrada && esTarde(entrada.timestamp, d.horaEntrada)){
+          cRetraso++;
+          const minTarde = aMinutos(hora24(entrada.timestamp)) - aMinutos(d.horaEntrada);
+          retrasoDetalle.push(`<div style="margin-top:5px;">${fotoMiniHtml(entrada)}${fechaCorta} (${formatearMinutos(minTarde)})${entrada.justificacion ? `<br><span class="muted" style="font-size:10px;">📝 ${escapeHtml(entrada.justificacion)}</span>` : ''}</div>`);
+        }
+        if(salida && esAntes(salida.timestamp, d.horaSalida)){
+          cSalidaAntes++;
+          const minAntes = aMinutos(d.horaSalida) - aMinutos(hora24(salida.timestamp));
+          salidaAntesDetalle.push(`<div style="margin-top:5px;">${fotoMiniHtml(salida)}${fechaCorta} (${formatearMinutos(minAntes)})${salida.justificacion ? `<br><span class="muted" style="font-size:10px;">📝 ${escapeHtml(salida.justificacion)}</span>` : ''}</div>`);
+        }
         if(entrada && !esTarde(entrada.timestamp, d.horaEntrada) && salida && !esAntes(salida.timestamp, d.horaSalida)) cTiempo++;
       });
 
@@ -1609,7 +1740,7 @@ Ana Martínez"></textarea>
         if(entrada){
           const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
           const tarde = esTarde(entrada.timestamp, d.horaEntrada);
-          entradaCell = `${hora} <span class="estado-tag ${tarde ? 'warn' : 'ok'}">${tarde ? 'Retraso' : 'A tiempo'}</span>`;
+          entradaCell = `${fotoMiniHtml(entrada)}${hora} <span class="estado-tag ${tarde ? 'warn' : 'ok'}">${tarde ? 'Retraso' : 'A tiempo'}</span>${entrada.justificacion ? `<br><span class="muted" style="font-size:10px;">📝 ${escapeHtml(entrada.justificacion)}</span>` : ''}`;
         }else if(ausenciaJustif){
           entradaCell = `<span class="estado-tag pending">Ausente</span><br><span class="muted" style="font-size:10.5px;">${escapeHtml(ausenciaJustif.justificacion)}</span>`;
         }else if(!esDiaLaboral(d, fecha)){
@@ -1622,7 +1753,7 @@ Ana Martínez"></textarea>
         if(salida){
           const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
           const antes = esAntes(salida.timestamp, d.horaSalida);
-          salidaCell = antes ? `${hora} <span class="estado-tag warn">Antes</span>` : hora;
+          salidaCell = `${fotoMiniHtml(salida)}${hora}${antes ? ' <span class="estado-tag warn">Antes</span>' : ''}${salida.justificacion ? `<br><span class="muted" style="font-size:10px;">📝 ${escapeHtml(salida.justificacion)}</span>` : ''}`;
         }
 
         return `<tr><td>${d.numero}. ${escapeHtml(d.nombre)}</td><td>${entradaCell}</td><td>${salidaCell}</td></tr>`;
@@ -1630,9 +1761,9 @@ Ana Martínez"></textarea>
         return `<tr>
           <td>${d.numero}. ${escapeHtml(d.nombre)}</td>
           <td>${cTiempo}</td>
-          <td>${cRetraso}</td>
-          <td>${cSalidaAntes}</td>
-          <td>${cAusente}${ausenteSinJustifFecha ? ' ' + justificarBtnHtml(d.nombre, d.numero, ausenteSinJustifFecha) : ''}</td>
+          <td>${cRetraso}${retrasoDetalle.join('')}</td>
+          <td>${cSalidaAntes}${salidaAntesDetalle.join('')}</td>
+          <td>${cAusente}${ausenteDetalle.join('')}</td>
         </tr>`;
       }
     }).join('');
@@ -1647,8 +1778,7 @@ Ana Martínez"></textarea>
           <thead>${headerRow}</thead>
           <tbody>${filas}</tbody>
         </table>
-      </div>
-      ${!soloUnDia ? '<p class="muted" style="margin-top:10px;font-size:12px;">Si hay varios días ausente sin justificar, el botón "Justificar" corresponde solo al primero — elige a la persona en el filtro de arriba para ver el detalle día por día.</p>' : ''}`;
+      </div>`;
     bindJustificarButtons(box);
   }
 
@@ -1681,12 +1811,12 @@ Ana Martínez"></textarea>
         if(entrada){
           const hora = new Date(entrada.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
           const tarde = esTarde(entrada.timestamp, d.horaEntrada);
-          partes.push(`Entrada ${hora}${tarde ? ' <span class="estado-tag warn">Retraso</span>' : ' <span class="estado-tag ok">A tiempo</span>'}`);
+          partes.push(`${fotoMiniHtml(entrada)}Entrada ${hora}${tarde ? ' <span class="estado-tag warn">Retraso</span>' : ' <span class="estado-tag ok">A tiempo</span>'}${entrada.justificacion ? `<br><span class="muted" style="font-size:10px;">📝 ${escapeHtml(entrada.justificacion)}</span>` : ''}`);
         }
         if(salida){
           const hora = new Date(salida.timestamp).toLocaleTimeString('es-SV', {hour:'2-digit', minute:'2-digit'});
           const antes = esAntes(salida.timestamp, d.horaSalida);
-          partes.push(`Salida ${hora}${antes ? ' <span class="estado-tag warn">Antes</span>' : ' <span class="estado-tag ok">A tiempo</span>'}`);
+          partes.push(`${fotoMiniHtml(salida)}Salida ${hora}${antes ? ' <span class="estado-tag warn">Antes</span>' : ' <span class="estado-tag ok">A tiempo</span>'}${salida.justificacion ? `<br><span class="muted" style="font-size:10px;">📝 ${escapeHtml(salida.justificacion)}</span>` : ''}`);
         }
         linea = partes.join(' · ');
       }else if(ausenciaJustif){
@@ -1817,8 +1947,14 @@ Ana Martínez"></textarea>
     });
     const gruposOrdenados = [...grupos.values()].sort((a,b) => new Date(b.latest) - new Date(a.latest));
 
+    // numera según el orden real de registro (el más antiguo es el 1), sin importar el número del colaborador
+    const ordenCronologico = [...gruposOrdenados].sort((a,b) => new Date(a.latest) - new Date(b.latest));
+    const numeroRegistroPorGrupo = new Map();
+    ordenCronologico.forEach((g, i) => numeroRegistroPorGrupo.set(g.docente + '|' + g.fecha, i + 1));
+
     list.innerHTML = gruposOrdenados.map(g=>{
       const dateStr = new Date(g.fecha + 'T00:00:00').toLocaleDateString('es-SV', {day:'numeric', month:'short', year:'numeric'});
+      const numeroRegistro = numeroRegistroPorGrupo.get(g.docente + '|' + g.fecha);
       let body;
       if(g.ausencia){
         body = `<div class="record-col" data-id="${g.ausencia.id}">
@@ -1832,7 +1968,7 @@ Ana Martínez"></textarea>
       }
       return `
         <div class="record-group">
-          <div class="record-group-header">${g.docenteNumero ? g.docenteNumero + '. ' : ''}${escapeHtml(g.docente)} <span class="muted" style="font-weight:400;">· ${dateStr}</span></div>
+          <div class="record-group-header">${numeroRegistro}. ${escapeHtml(g.docente)} <span class="muted" style="font-weight:400;">· ${dateStr}</span></div>
           <div class="record-group-cols">${body}</div>
         </div>`;
     }).join('');
